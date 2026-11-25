@@ -1,0 +1,996 @@
+<div class="min-h-screen bg-slate-100 flex flex-col font-sans">
+  <!-- Admin Header -->
+  <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-xs">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-2xl overflow-hidden shadow-md shadow-orange-500/20 border border-orange-300 bg-white flex items-center justify-center">
+        <img src="avatar.png" alt="Admin Avatar" class="w-full h-full object-cover" />
+      </div>
+      <div>
+        <h1 class="font-extrabold text-slate-900 text-lg leading-tight">RajMaster Administration & AI Control Center</h1>
+        <p class="text-xs text-slate-500">PostgreSQL Geographic Hierarchy • LangGraph • Ollama Models • RajMaster Scraper</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <a routerLink="/" class="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl transition-colors flex items-center space-x-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        <span>View Public Chat</span>
+      </a>
+
+      <button (click)="logout()" class="text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-xl transition-colors flex items-center space-x-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        <span>Sign Out</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Top Navigation Tabs -->
+  <div class="bg-white border-b border-slate-200 px-6 flex space-x-6">
+    <button (click)="activeTab = 'llm'"
+            [class.border-orange-600]="activeTab === 'llm'"
+            [class.text-orange-600]="activeTab === 'llm'"
+            [class.border-transparent]="activeTab !== 'llm'"
+            [class.text-slate-500]="activeTab !== 'llm'"
+            class="py-3.5 border-b-2 font-bold text-sm transition-all flex items-center space-x-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+      <span>LLM & AI Control</span>
+    </button>
+
+    <button (click)="activeTab = 'scraper'"
+            [class.border-orange-600]="activeTab === 'scraper'"
+            [class.text-orange-600]="activeTab === 'scraper'"
+            [class.border-transparent]="activeTab !== 'scraper'"
+            [class.text-slate-500]="activeTab !== 'scraper'"
+            class="py-3.5 border-b-2 font-bold text-sm transition-all flex items-center space-x-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      <span>RajMaster Scraper ETL</span>
+    </button>
+
+    <button (click)="activeTab = 'database'"
+            [class.border-orange-600]="activeTab === 'database'"
+            [class.text-orange-600]="activeTab === 'database'"
+            [class.border-transparent]="activeTab !== 'database'"
+            [class.text-slate-500]="activeTab !== 'database'"
+            class="py-3.5 border-b-2 font-bold text-sm transition-all flex items-center space-x-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+      <span>Geographic Stats & Records</span>
+    </button>
+
+    <button (click)="activeTab = 'logs'"
+            [class.border-orange-600]="activeTab === 'logs'"
+            [class.text-orange-600]="activeTab === 'logs'"
+            [class.border-transparent]="activeTab !== 'logs'"
+            [class.text-slate-500]="activeTab !== 'logs'"
+            class="py-3.5 border-b-2 font-bold text-sm transition-all flex items-center space-x-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+      <span>User Chat & Helpline Logs</span>
+    </button>
+  </div>
+
+  <!-- Tab Contents -->
+  <div class="flex-1 p-6 max-w-7xl w-full mx-auto">
+    
+    <!-- ================= TAB 1: LLM CONTROL CENTER ================= -->
+    <div *ngIf="activeTab === 'llm'" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left: Configuration Form -->
+        <div class="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-5">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h2 class="font-bold text-slate-900 text-base">Active Ollama Model & Parameters</h2>
+              <p class="text-xs text-slate-500">Configure parameters for LangGraph agent synthesis</p>
+            </div>
+            <span *ngIf="llmSaveStatus" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              {{ llmSaveStatus }}
+            </span>
+          </div>
+
+          <form (ngSubmit)="saveLLMConfig()" (submit)="$event.preventDefault()" class="space-y-4">
+            <!-- Ollama Model Dropdown -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1">
+                <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Active Ollama Model</label>
+                <select [(ngModel)]="llmConfig.active_model" name="active_model"
+                        class="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm outline-none bg-white">
+                  <option *ngFor="let model of llmConfig.available_models" [value]="model">
+                    {{ model }}
+                  </option>
+                  <option *ngIf="!llmConfig.available_models.includes(llmConfig.active_model)" [value]="llmConfig.active_model">
+                    {{ llmConfig.active_model }} (Active)
+                  </option>
+                </select>
+                <p class="text-[11px] text-slate-400">Endpoint: {{ llmConfig.ollama_base_url }}</p>
+              </div>
+
+              <!-- Support Phone Helpline -->
+              <div class="space-y-1">
+                <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Fallback Helpline Phone</label>
+                <input type="text" [(ngModel)]="llmConfig.support_phone" name="support_phone"
+                       class="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm outline-none">
+                <p class="text-[11px] text-slate-400">Prominently shown on out-of-scope queries</p>
+              </div>
+            </div>
+
+            <!-- Temperature Slider & Max Tokens -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Temperature</label>
+                  <span class="text-xs font-mono font-bold text-orange-600">{{ llmConfig.temperature }}</span>
+                </div>
+                <input type="range" [(ngModel)]="llmConfig.temperature" name="temperature" min="0" max="1" step="0.05"
+                       class="w-full accent-orange-600">
+                <div class="flex justify-between text-[10px] text-slate-400 font-medium">
+                  <span>0.0 (Strict / Fact-focused)</span>
+                  <span>1.0 (Creative)</span>
+                </div>
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Max Tokens</label>
+                <input type="number" [(ngModel)]="llmConfig.max_tokens" name="max_tokens" min="256" max="4096"
+                       class="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm outline-none">
+              </div>
+            </div>
+
+            <!-- System Prompt -->
+            <div class="space-y-1">
+              <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Agent System Prompt</label>
+              <textarea [(ngModel)]="llmConfig.system_prompt" name="system_prompt" rows="4"
+                        class="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-xs font-mono outline-none"></textarea>
+            </div>
+
+            <!-- Greeting Message -->
+            <div class="space-y-1">
+              <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Citizen Welcome Greeting</label>
+              <textarea [(ngModel)]="llmConfig.greeting_message" name="greeting_message" rows="2"
+                        class="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-xs outline-none"></textarea>
+            </div>
+
+            <button type="submit"
+                    class="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm shadow hover:shadow-md transition-all flex items-center space-x-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>Save LLM Configuration</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Right: Test Response Sandbox -->
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col space-y-4">
+          <div class="border-b border-slate-100 pb-2">
+            <h3 class="font-bold text-slate-900 text-sm">Test Response Sandbox</h3>
+            <p class="text-xs text-slate-500">Verify LLM response with current system prompt</p>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-xs font-bold text-slate-700">Sample Query</label>
+            <input type="text" [(ngModel)]="testPromptInput"
+                   class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+            <button type="button" (click)="runTestPrompt()" [disabled]="isTestingPrompt"
+                    class="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow transition-all disabled:opacity-50">
+              {{ isTestingPrompt ? 'Querying Pipeline...' : 'Run Test Query' }}
+            </button>
+          </div>
+
+          <div class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs overflow-y-auto max-h-72">
+            <div *ngIf="isTestingPrompt" class="text-slate-400 italic">Streaming LangGraph execution...</div>
+            <div *ngIf="!isTestingPrompt && testPromptResult" class="whitespace-pre-wrap font-sans text-slate-800 leading-relaxed">
+              {{ testPromptResult }}
+            </div>
+            <div *ngIf="!isTestingPrompt && !testPromptResult" class="text-slate-400 italic text-center py-8">
+              Click 'Run Test Query' to preview agent synthesis.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RAG & Live Web Search Fallback Configuration Card -->
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="font-bold text-slate-900 text-base flex items-center space-x-2">
+              <span class="text-xl">🧠</span>
+              <span>RAG Knowledge Retrieval & Live Web Search Fallback</span>
+            </h2>
+            <p class="text-xs text-slate-500">Configure PostgreSQL knowledge retrieval and multi-provider live web search fallback</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span *ngIf="llmSaveStatus" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              {{ llmSaveStatus }}
+            </span>
+            <span class="text-xs font-bold text-orange-700 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
+              Hybrid Grounding
+            </span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Left: Database RAG Retrieval -->
+          <div class="p-5 bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                  <span>Database RAG Retrieval</span>
+                </h3>
+                <p class="text-[11px] text-slate-500 mt-1">Grounding via PostgreSQL fuzzy matching & multi-table indexing</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" [(ngModel)]="llmConfig.enable_rag" name="enable_rag" class="sr-only peer">
+                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            <div *ngIf="llmConfig.enable_rag" class="space-y-4 pt-3 border-t border-slate-200/80">
+              <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs font-bold text-slate-700">RAG Top-K Records</label>
+                  <span class="text-xs font-mono font-bold text-blue-600">{{ llmConfig.rag_top_k || 5 }}</span>
+                </div>
+                <input type="number" [(ngModel)]="llmConfig.rag_top_k" name="rag_top_k" min="1" max="20"
+                       class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs outline-none bg-white font-mono">
+                <p class="text-[10px] text-slate-400">Maximum records to pull into LLM grounding context (1-20, default: 5)</p>
+              </div>
+
+              <div class="p-3 bg-white/80 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-600">
+                <div class="font-bold text-slate-800 flex items-center space-x-1.5">
+                  <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>Active RAG Knowledge Indexes</span>
+                </div>
+                <div class="text-[11px] text-slate-500 leading-relaxed">
+                  Indexed over 10,094 pincodes, 426 tehsils, 457 blocks, and 50 districts across Rajasthan Master and Public schemas.
+                </div>
+              </div>
+            </div>
+
+            <div *ngIf="!llmConfig.enable_rag" class="p-3 bg-slate-100/80 rounded-xl text-center text-xs text-slate-400 italic">
+              Database RAG is currently disabled. Exact matches only.
+            </div>
+          </div>
+
+          <!-- Right: Live Web Search Fallback -->
+          <div class="p-5 bg-gradient-to-br from-slate-50 to-emerald-50/30 rounded-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center space-x-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                  <span>Live Web Search Fallback</span>
+                </h3>
+                <p class="text-[11px] text-slate-500 mt-1">Real-time web search fallback when DB records are insufficient</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" [(ngModel)]="llmConfig.enable_web_search" name="enable_web_search" class="sr-only peer">
+                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            <div *ngIf="llmConfig.enable_web_search" class="space-y-4 pt-3 border-t border-slate-200/80">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-700">Search Engine Provider</label>
+                  <select [(ngModel)]="llmConfig.web_search_provider" name="web_search_provider"
+                          class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-xs outline-none bg-white">
+                    <option value="duckduckgo">DuckDuckGo (Instant - No Key Required)</option>
+                    <option value="tavily">Tavily AI Search (Requires API Key)</option>
+                    <option value="serpapi">SerpAPI Google Search (Requires API Key)</option>
+                  </select>
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-700">Max Search Results</label>
+                  <input type="number" [(ngModel)]="llmConfig.web_search_max_results" name="web_search_max_results" min="1" max="10"
+                         class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-xs outline-none bg-white font-mono">
+                </div>
+              </div>
+
+              <div *ngIf="llmConfig.web_search_provider !== 'duckduckgo'" class="space-y-1">
+                <label class="text-xs font-bold text-slate-700">API Key ({{ llmConfig.web_search_provider }})</label>
+                <input type="password" [(ngModel)]="llmConfig.web_search_api_key" name="web_search_api_key"
+                       placeholder="Enter API key..."
+                       class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-xs outline-none bg-white font-mono">
+                <p class="text-[10px] text-slate-400">Key is securely saved to database and used only for web queries</p>
+              </div>
+
+              <div class="p-3 bg-white/80 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-600">
+                <div class="font-bold text-slate-800 flex items-center space-x-1.5">
+                  <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>Automated Fallback Architecture</span>
+                </div>
+                <div class="text-[11px] text-slate-500 leading-relaxed">
+                  Queries on government officials, schemes, and news automatically synthesize answers citing official portals (e.g. rajasthan.gov.in, DIPR, CMO).
+                </div>
+              </div>
+            </div>
+
+            <div *ngIf="!llmConfig.enable_web_search" class="p-3 bg-slate-100/80 rounded-xl text-center text-xs text-slate-400 italic">
+              Live Web Search Fallback is disabled. Unfound items will show helpline.
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-2 border-t border-slate-100">
+          <button type="button" (click)="saveLLMConfig()"
+                  class="px-6 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow hover:shadow-md transition-all flex items-center space-x-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span>Save RAG & Web Search Settings</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= TAB 2: RAJMASTER SCRAPER CONTROL ================= -->
+    <div *ngIf="activeTab === 'scraper'" class="space-y-6">
+      
+      <!-- Scraper Actions Card -->
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="font-bold text-slate-900 text-base">RajMaster Portal Scraper & ETL Pipeline</h2>
+            <p class="text-xs text-slate-500">Source: https://rajmasters.rajasthan.gov.in/ • Async Polars & PostgreSQL Upsert</p>
+          </div>
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-1.5 text-xs font-medium text-slate-600">
+              <span>Limit:</span>
+              <input type="number" [(ngModel)]="syncLimit" min="50" max="1000" step="50"
+                     class="w-20 px-2 py-1 rounded-lg border border-slate-300 text-xs font-mono font-bold">
+            </div>
+            <button (click)="triggerSync('ALL')" [disabled]="isSyncing"
+                    class="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs shadow hover:shadow-md transition-all disabled:opacity-50 flex items-center space-x-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <span>Sync All Masters</span>
+            </button>
+          </div>
+        </div>
+
+        <div *ngIf="syncNotice" class="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
+          <span>{{ syncNotice }}</span>
+          <button (click)="syncNotice=''" class="text-blue-500 font-bold hover:text-blue-700">✕</button>
+        </div>
+
+        <!-- Master Trigger Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div *ngFor="let m of availableMasters" class="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between hover:border-orange-300 transition-colors">
+            <div>
+              <div class="text-xs font-bold text-slate-800">{{ m.label }}</div>
+              <div class="text-[10px] text-slate-400 font-mono">{{ m.name }}</div>
+            </div>
+            <button (click)="triggerSync(m.name)" [disabled]="isSyncing"
+                    class="text-xs font-bold text-orange-600 hover:text-orange-700 bg-white border border-orange-200 hover:bg-orange-50 px-2.5 py-1.5 rounded-xl shadow-2xs transition-all disabled:opacity-50">
+              Sync
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scraper Run History Table -->
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 class="font-bold text-slate-900 text-sm">Real-time Scraper Run History</h3>
+          <button (click)="loadScraperRuns()" class="text-xs font-semibold text-orange-600 hover:text-orange-700 flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">Run ID</th>
+                <th class="py-2.5 px-3">Master Target</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3">Fetched</th>
+                <th class="py-2.5 px-3">Upserted</th>
+                <th class="py-2.5 px-3">Started</th>
+                <th class="py-2.5 px-3">Logs / Notice</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              <tr *ngFor="let run of scraperRuns" class="hover:bg-slate-50 transition-colors">
+                <td class="py-2.5 px-3 font-mono font-bold text-slate-500">#{{ run.id }}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">{{ run.master_name }}</td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                        [ngClass]="{
+                          'bg-emerald-100 text-emerald-800': run.status === 'completed',
+                          'bg-amber-100 text-amber-800': run.status === 'running',
+                          'bg-red-100 text-red-800': run.status === 'failed'
+                        }">
+                    {{ run.status }}
+                  </span>
+                </td>
+                <td class="py-2.5 px-3 font-mono">{{ run.rows_fetched }}</td>
+                <td class="py-2.5 px-3 font-mono font-bold text-emerald-600">{{ run.rows_upserted }}</td>
+                <td class="py-2.5 px-3 text-slate-400">{{ run.started_at | date:'short' }}</td>
+                <td class="py-2.5 px-3 text-slate-500 max-w-xs truncate">{{ run.error_logs || 'Clean sync.' }}</td>
+              </tr>
+              <tr *ngIf="scraperRuns.length === 0">
+                <td colspan="7" class="py-6 text-center text-slate-400 italic">No runs logged yet. Click 'Sync' above.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================= TAB 3: DATABASE STATS & MANUAL ENTRY ================= -->
+    <div *ngIf="activeTab === 'database'" class="space-y-6">
+      
+      <!-- Live Count Stat Cards across all 6 tiers (Clickable with Active Highlight) -->
+      <div *ngIf="stats" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        <!-- Division Box -->
+        <div (click)="selectBox('division')"
+             data-box="division"
+             id="stat-box-division"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'division' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Divisions</div>
+            <span *ngIf="selectedBoxLevel === 'division'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.divisions }}</div>
+          <div class="text-[10px] text-orange-600 font-semibold mt-0.5">10 Official Divisions ➔</div>
+        </div>
+
+        <!-- District Box -->
+        <div (click)="selectBox('district')"
+             data-box="district"
+             id="stat-box-district"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'district' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Districts</div>
+            <span *ngIf="selectedBoxLevel === 'district'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.districts }}</div>
+          <div class="text-[10px] text-orange-600 font-semibold mt-0.5">50 Zila Parishads ➔</div>
+        </div>
+
+        <!-- Sub-Division Box -->
+        <div (click)="selectBox('sub_division')"
+             data-box="sub_division"
+             id="stat-box-sub_division"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'sub_division' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Sub-Divisions</div>
+            <span *ngIf="selectedBoxLevel === 'sub_division'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.sub_divisions }}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">SDM Jurisdictions ➔</div>
+        </div>
+
+        <!-- Tehsil & Block Box -->
+        <div (click)="selectBox('tehsil_block')"
+             data-box="tehsil_block"
+             id="stat-box-tehsil_block"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'tehsil_block' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tehsils / Blocks</div>
+            <span *ngIf="selectedBoxLevel === 'tehsil_block'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.tehsils_blocks }}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Tehsildar & BDO ➔</div>
+        </div>
+
+        <!-- Gram Panchayat Box -->
+        <div (click)="selectBox('gram_panchayat')"
+             data-box="gram_panchayat"
+             id="stat-box-gram_panchayat"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'gram_panchayat' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Gram Panchayats</div>
+            <span *ngIf="selectedBoxLevel === 'gram_panchayat'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.gram_panchayats }}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Sarpanch Governance ➔</div>
+        </div>
+
+        <!-- Revenue Village Box -->
+        <div (click)="selectBox('village')"
+             data-box="village"
+             id="stat-box-village"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'village' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Revenue Villages</div>
+            <span *ngIf="selectedBoxLevel === 'village'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.villages }}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Patwar Circles & LGD ➔</div>
+        </div>
+
+        <!-- Urban Bodies (ULB) Box -->
+        <div (click)="selectBox('ulb')"
+             data-box="ulb"
+             id="stat-box-ulb"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'ulb' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Urban Bodies (ULB)</div>
+            <span *ngIf="selectedBoxLevel === 'ulb'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.urban_local_bodies }}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Nigam/Parishad/Palika ➔</div>
+        </div>
+
+        <!-- Urban Ward Box -->
+        <div (click)="selectBox('urban_ward')"
+             data-box="urban_ward"
+             id="stat-box-urban_ward"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'urban_ward' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Urban Wards</div>
+            <span *ngIf="selectedBoxLevel === 'urban_ward'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.urban_wards }}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Ward Councillors ➔</div>
+        </div>
+
+        <!-- Pincode Box -->
+        <div (click)="selectBox('pincode')"
+             data-box="pincode"
+             id="stat-box-pincode"
+             class="p-4 rounded-2xl border transition-all cursor-pointer relative select-none"
+             [ngClass]="selectedBoxLevel === 'pincode' ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50/60 shadow-md -translate-y-0.5' : 'bg-white border-slate-200 hover:border-orange-300 hover:shadow-xs'">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Pincodes</div>
+            <span *ngIf="selectedBoxLevel === 'pincode'" class="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-600 text-white tracking-wider">ACTIVE</span>
+          </div>
+          <div class="text-2xl font-black text-slate-900 mt-1">{{ stats.pincodes }}</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Postal Directories ➔</div>
+        </div>
+
+        <!-- Total Geographic DB Box -->
+        <div class="p-4 bg-gradient-to-tr from-orange-600 to-amber-600 text-white rounded-2xl shadow-md select-none">
+          <div class="text-[11px] font-bold text-orange-200 uppercase tracking-wider">Total Geographic DB</div>
+          <div class="text-2xl font-black mt-1">{{ stats.total_entities }}</div>
+          <div class="text-[10px] text-orange-100 mt-0.5">Live Master Records</div>
+        </div>
+      </div>
+
+      <!-- ================= LISTING OF THE BOXES WITH EDIT OPTION ================= -->
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+        
+        <!-- Header & Category Switcher -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-xl">{{ getLevelBadge(selectedBoxLevel).icon }}</span>
+              <h3 class="font-black text-slate-900 text-base sm:text-lg">
+                {{ getLevelBadge(selectedBoxLevel).name }} Master Records
+              </h3>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                {{ recordsTotal }} Total
+              </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Click any box above to switch tiers. Click <strong class="text-slate-800">✏️ Edit</strong> to update administrative, authority, or LGD details in PostgreSQL.
+            </p>
+          </div>
+
+          <!-- Notification Banner -->
+          <div *ngIf="recordsNotice" class="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center space-x-1.5">
+            <span>{{ recordsNotice }}</span>
+          </div>
+        </div>
+
+        <!-- Quick Tier Switcher Buttons -->
+        <div class="flex items-center space-x-1.5 overflow-x-auto pb-1 text-xs">
+          <button (click)="selectBox('division')"
+                  [ngClass]="selectedBoxLevel === 'division' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            🏛️ Divisions
+          </button>
+          <button (click)="selectBox('district')"
+                  [ngClass]="selectedBoxLevel === 'district' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            📍 Districts
+          </button>
+          <button (click)="selectBox('sub_division')"
+                  [ngClass]="selectedBoxLevel === 'sub_division' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            ⚖️ Sub-Divisions
+          </button>
+          <button (click)="selectBox('tehsil_block')"
+                  [ngClass]="selectedBoxLevel === 'tehsil_block' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            🏢 Tehsils / Blocks
+          </button>
+          <button (click)="selectBox('gram_panchayat')"
+                  [ngClass]="selectedBoxLevel === 'gram_panchayat' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            🏡 Gram Panchayats
+          </button>
+          <button (click)="selectBox('village')"
+                  [ngClass]="selectedBoxLevel === 'village' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            🌾 Revenue Villages
+          </button>
+          <button (click)="selectBox('ulb')"
+                  [ngClass]="selectedBoxLevel === 'ulb' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            🏙️ Urban Bodies (ULB)
+          </button>
+          <button (click)="selectBox('urban_ward')"
+                  [ngClass]="selectedBoxLevel === 'urban_ward' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            🏘️ Urban Wards
+          </button>
+          <button (click)="selectBox('pincode')"
+                  [ngClass]="selectedBoxLevel === 'pincode' ? 'bg-orange-600 text-white font-bold shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded-xl transition-all whitespace-nowrap">
+            📮 Pincodes
+          </button>
+        </div>
+
+        <!-- Search Bar & Controls -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+          <div class="flex items-center space-x-2 flex-1 max-w-md">
+            <div class="relative w-full">
+              <input type="text"
+                     [(ngModel)]="recordSearchTerm"
+                     (ngModelChange)="onRecordSearch()"
+                     placeholder="Search {{ getLevelBadge(selectedBoxLevel).name }} by name, code..."
+                     class="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500 bg-white">
+              <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <button *ngIf="recordSearchTerm" (click)="clearRecordSearch()" class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs">
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-3 text-xs">
+            <span class="text-slate-500 font-medium">Showing {{ recordsList.length }} of {{ recordsTotal }} records</span>
+            <button (click)="loadRecords()"
+                    class="px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold transition-all flex items-center space-x-1 shadow-2xs">
+              <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Records Table -->
+        <div class="overflow-x-auto border border-slate-200 rounded-2xl">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold uppercase tracking-wider">
+                <th class="py-3 px-3.5">ID</th>
+                <th class="py-3 px-3.5">Name (English & Hindi)</th>
+                <th class="py-3 px-3.5">Code / LGD</th>
+                <th class="py-3 px-3.5">Parent Entity</th>
+                <th class="py-3 px-3.5">Governance / Authority</th>
+                <th class="py-3 px-3.5">Pincode / Type</th>
+                <th class="py-3 px-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              <tr *ngFor="let r of recordsList" class="hover:bg-orange-50/30 transition-colors">
+                <!-- ID -->
+                <td class="py-3 px-3.5 font-mono font-bold text-slate-400">#{{ r.id }}</td>
+
+                <!-- Names -->
+                <td class="py-3 px-3.5">
+                  <div class="font-bold text-slate-900 text-[13px]">{{ r.name_en }}</div>
+                  <div class="text-[11px] text-slate-500" *ngIf="r.name_hi">{{ r.name_hi }}</div>
+                </td>
+
+                <!-- Code / LGD -->
+                <td class="py-3 px-3.5">
+                  <div class="flex flex-wrap items-center gap-1">
+                    <span *ngIf="r.code" class="px-1.5 py-0.5 rounded font-mono font-bold bg-slate-100 text-slate-700 text-[11px] border border-slate-200">
+                      {{ r.code }}
+                    </span>
+                    <span *ngIf="r.lgd_code" class="px-1.5 py-0.5 rounded font-mono font-semibold bg-blue-50 text-blue-700 text-[10px] border border-blue-200">
+                      LGD: {{ r.lgd_code }}
+                    </span>
+                  </div>
+                </td>
+
+                <!-- Parent Entity -->
+                <td class="py-3 px-3.5">
+                  <span class="text-slate-600 font-medium">{{ r.parent_name || 'Rajasthan' }}</span>
+                </td>
+
+                <!-- Authority Details -->
+                <td class="py-3 px-3.5">
+                  <span class="text-slate-700 font-medium">{{ r.authority_details || 'Official Jurisdiction' }}</span>
+                </td>
+
+                <!-- Pincode / Type -->
+                <td class="py-3 px-3.5">
+                  <div class="flex items-center space-x-1">
+                    <span *ngIf="r.pincode" class="px-1.5 py-0.5 rounded font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200 text-[10px]">
+                      📮 {{ r.pincode }}
+                    </span>
+                    <span *ngIf="r.extra_type" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                      {{ r.extra_type }}
+                    </span>
+                  </div>
+                </td>
+
+                <!-- Actions: Edit & Delete -->
+                <td class="py-3 px-3.5 text-right whitespace-nowrap">
+                  <div class="inline-flex items-center space-x-2">
+                    <button (click)="openEditModal(r)"
+                            class="px-2.5 py-1 rounded-xl bg-orange-50 text-orange-700 hover:bg-orange-600 hover:text-white border border-orange-200 text-xs font-bold transition-all shadow-2xs inline-flex items-center space-x-1 cursor-pointer">
+                      <span>✏️</span>
+                      <span>Edit</span>
+                    </button>
+                    <button (click)="deleteRecord(r)"
+                            class="px-2 py-1 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer">
+                      <span>🗑️</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Loading State -->
+              <tr *ngIf="isLoadingRecords">
+                <td colspan="7" class="py-10 text-center text-slate-500">
+                  <div class="inline-flex items-center space-x-2">
+                    <div class="w-4 h-4 border-2 border-orange-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="font-medium text-xs">Loading {{ getLevelBadge(selectedBoxLevel).name }} records from PostgreSQL...</span>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Empty State -->
+              <tr *ngIf="!isLoadingRecords && recordsList.length === 0">
+                <td colspan="7" class="py-10 text-center text-slate-400 italic">
+                  No records found in {{ getLevelBadge(selectedBoxLevel).name }} matching your search query.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ================= EDIT RECORD MODAL ================= -->
+      <div *ngIf="editingRecord" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          
+          <!-- Modal Header -->
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center space-x-2">
+              <span class="text-xl">✏️</span>
+              <div>
+                <h3 class="font-bold text-slate-900 text-base">Edit Geographic Master Record</h3>
+                <p class="text-xs text-slate-500">
+                  Tier: <strong class="text-orange-600 uppercase">{{ editingRecord.level }}</strong> • ID: #{{ editingRecord.id }}
+                </p>
+              </div>
+            </div>
+            <button (click)="closeEditModal()" class="text-slate-400 hover:text-slate-700 text-lg font-bold p-1">
+              ✕
+            </button>
+          </div>
+
+          <!-- Notice / Feedback Alert -->
+          <div *ngIf="editModalNotice"
+               [ngClass]="editModalNotice.startsWith('✓') ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'"
+               class="p-2.5 rounded-xl border text-xs font-semibold">
+            {{ editModalNotice }}
+          </div>
+
+          <!-- Edit Form Fields -->
+          <form (ngSubmit)="saveEditRecord()" (submit)="$event.preventDefault()" class="space-y-3.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              
+              <!-- English Name -->
+              <div class="space-y-1">
+                <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">English Name *</label>
+                <input type="text" [(ngModel)]="editingRecord.name_en" name="edit_name_en" required
+                       class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold outline-none focus:border-orange-500">
+              </div>
+
+              <!-- Hindi Name -->
+              <div class="space-y-1">
+                <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Hindi Name</label>
+                <input type="text" [(ngModel)]="editingRecord.name_hi" name="edit_name_hi"
+                       class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+              </div>
+
+              <!-- Code -->
+              <div class="space-y-1">
+                <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Code / Short Identifier</label>
+                <input type="text" [(ngModel)]="editingRecord.code" name="edit_code"
+                       class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono outline-none focus:border-orange-500">
+              </div>
+
+              <!-- LGD Code -->
+              <div class="space-y-1">
+                <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">LGD Code</label>
+                <input type="number" [(ngModel)]="editingRecord.lgd_code" name="edit_lgd_code"
+                       class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono outline-none focus:border-orange-500">
+              </div>
+
+              <!-- Pincode -->
+              <div class="space-y-1">
+                <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Pincode</label>
+                <input type="text" [(ngModel)]="editingRecord.pincode" name="edit_pincode"
+                       class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono outline-none focus:border-orange-500">
+              </div>
+
+              <!-- Entity / Urban Type -->
+              <div class="space-y-1">
+                <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Sub-Type / Classification</label>
+                <input type="text" [(ngModel)]="editingRecord.extra_type" name="edit_extra_type"
+                       class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+              </div>
+            </div>
+
+            <!-- Official Authority & Governance Details -->
+            <div class="space-y-1">
+              <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Governance / Official Authority Details</label>
+              <textarea [(ngModel)]="editingRecord.authority_details" name="edit_authority_details" rows="2"
+                        placeholder="e.g. District Collectorate, Jaipur / Tehsildar Sanganer / Sarpanch Muhana..."
+                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500"></textarea>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+              <button type="button" (click)="closeEditModal()"
+                      class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all">
+                Cancel
+              </button>
+              <button type="submit" [disabled]="isSavingEdit"
+                      class="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition-all shadow flex items-center space-x-1.5 disabled:opacity-50">
+                <span *ngIf="isSavingEdit" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>{{ isSavingEdit ? 'Saving...' : 'Save Changes to Database' }}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Add Record Form Card -->
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h3 class="font-bold text-slate-900 text-base">Add or Modify Geographic Hierarchy Record</h3>
+            <p class="text-xs text-slate-500">Includes automatic LGD code and JSONB metadata attribute preservation</p>
+          </div>
+          <span *ngIf="entrySuccessNotice" class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+            {{ entrySuccessNotice }}
+          </span>
+        </div>
+
+        <form (ngSubmit)="submitGeoEntry()" (submit)="$event.preventDefault()" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="space-y-1">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Administrative Tier</label>
+            <select [(ngModel)]="newEntry.level" name="level"
+                    class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none bg-white">
+              <option value="village">Revenue Village</option>
+              <option value="gram_panchayat">Gram Panchayat</option>
+              <option value="tehsil_block">Tehsil / Block</option>
+              <option value="sub_division">Sub-Division</option>
+              <option value="district">District</option>
+              <option value="division">Division</option>
+              <option value="ulb">Urban Local Body</option>
+              <option value="pincode">Pincode</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Name (English)</label>
+            <input type="text" [(ngModel)]="newEntry.name_en" name="name_en" required placeholder="e.g. Sanganer"
+                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Name (Hindi)</label>
+            <input type="text" [(ngModel)]="newEntry.name_hi" name="name_hi" placeholder="e.g. सांगानेर"
+                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Code / Pincode</label>
+            <input type="text" [(ngModel)]="newEntry.code" name="code" placeholder="e.g. 302029 or T01"
+                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Official LGD Code</label>
+            <input type="number" [(ngModel)]="newEntry.lgd_code" name="lgd_code" placeholder="e.g. 2004"
+                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Parent ID (District/Tehsil ID)</label>
+            <input type="number" [(ngModel)]="newEntry.parent_id" name="parent_id" placeholder="e.g. 1"
+                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+          </div>
+
+          <div class="sm:col-span-3 space-y-1">
+            <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">Governance Details / Officer Contact</label>
+            <input type="text" [(ngModel)]="newEntry.extra_details" name="extra_details" placeholder="e.g. Patwari Circle Muhana / Tehsildar Office"
+                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
+          </div>
+
+          <div class="sm:col-span-3">
+            <button type="submit"
+                    class="px-6 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow transition-all">
+              Add Record to Hierarchy
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- ================= TAB 4: CHAT & HELPLINE LOGS ================= -->
+    <div *ngIf="activeTab === 'logs'" class="space-y-6">
+      <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+        
+        <!-- Search and Filter Bar -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div class="flex items-center space-x-2">
+            <input type="text" [(ngModel)]="logSearchTerm" (keyup.enter)="loadLogs()"
+                   placeholder="Search user queries..."
+                   class="px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none w-60">
+            <select [(ngModel)]="logIntentFilter" (change)="loadLogs()"
+                    class="px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none bg-white">
+              <option value="">All Intents</option>
+              <option value="geographic_query">Geographic Query</option>
+              <option value="capability_query">Capability Query</option>
+              <option value="out_of_scope">Out of Scope (Helpline)</option>
+            </select>
+            <button (click)="loadLogs()" class="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
+              Filter
+            </button>
+          </div>
+
+          <span class="text-xs text-slate-400 font-medium">Showing latest {{ chatLogs.length }} interactions</span>
+        </div>
+
+        <!-- Logs Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider">
+                <th class="py-2.5 px-3">Log ID</th>
+                <th class="py-2.5 px-3">User Query</th>
+                <th class="py-2.5 px-3">Detected Intent</th>
+                <th class="py-2.5 px-3">Latency</th>
+                <th class="py-2.5 px-3">AI Response Excerpt</th>
+                <th class="py-2.5 px-3">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              <tr *ngFor="let log of chatLogs" class="hover:bg-slate-50 transition-colors">
+                <td class="py-2.5 px-3 font-mono font-bold text-slate-400">#{{ log.id }}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900 max-w-xs truncate">{{ log.user_query }}</td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                        [ngClass]="{
+                          'bg-emerald-100 text-emerald-800': log.detected_intent === 'geographic_query',
+                          'bg-blue-100 text-blue-800': log.detected_intent === 'capability_query',
+                          'bg-red-100 text-red-800': log.detected_intent === 'out_of_scope'
+                        }">
+                    {{ log.detected_intent.replace('_', ' ') }}
+                  </span>
+                </td>
+                <td class="py-2.5 px-3 font-mono">{{ log.latency_ms }}ms</td>
+                <td class="py-2.5 px-3 text-slate-500 max-w-sm truncate">{{ log.ai_response }}</td>
+                <td class="py-2.5 px-3 text-slate-400">{{ log.created_at | date:'short' }}</td>
+              </tr>
+              <tr *ngIf="chatLogs.length === 0">
+                <td colspan="6" class="py-8 text-center text-slate-400 italic">No chat logs recorded yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

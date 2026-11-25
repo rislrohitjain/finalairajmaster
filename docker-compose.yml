@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # 1. Frontend: Angular 18+ Responsive UI (Port 3006)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finalairajmaster_frontend
+    restart: unless-stopped
+    ports:
+      - "3006:80"
+    depends_on:
+      - backend
+    networks:
+      - rajmaster_net
+
+  # 2. Backend: FastAPI + LangGraph Agent + Scraper Pipeline (Port 3007)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finalairajmaster_backend
+    restart: unless-stopped
+    ports:
+      - "3007:8000"
+    environment:
+      - DB_TYPE=postgres
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=Admin@123
+      - DB_NAME=finalairajmaster
+      - ENABLE_POSTGRES=true
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - DEFAULT_OLLAMA_MODEL=llama3.2:3b
+      - JWT_SECRET_KEY=finalairajmaster_super_secret_key_2026
+      - SUPPORT_PHONE=89988555525
+      - RAJMASTER_BASE_URL=https://rajmasters.rajasthan.gov.in
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - rajmaster_net
+
+  # 3. Database Web GUI: Adminer for PostgreSQL Inspection (Port 3008)
+  adminer:
+    image: adminer:latest
+    container_name: finalairajmaster_adminer
+    restart: unless-stopped
+    ports:
+      - "3008:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - rajmaster_net
+
+networks:
+  rajmaster_net:
+    driver: bridge
