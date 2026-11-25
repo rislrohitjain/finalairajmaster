@@ -1,7 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
+import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
@@ -10,16 +10,28 @@ import { AuthService } from '../../services/auth.service';
   imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './admin-login.component.html'
 })
-export class AdminLoginComponent {
+export class AdminLoginComponent implements OnInit {
   username: string = '8946919241';
   password: string = '123456';
   errorMessage: string = '';
+  sessionNotice: string = '';
   isLoading: boolean = false;
 
-  constructor(private auth: AuthService, private router: Router) {
-    if (this.auth.isLoggedIn()) {
-      this.router.navigate(['/admin/dashboard']);
-    }
+  constructor(
+    private auth: AuthService,
+    private router: Router,
+    private route: ActivatedRoute
+  ) {}
+
+  ngOnInit(): void {
+    this.route.queryParams.subscribe(params => {
+      if (params['expired']) {
+        this.sessionNotice = 'Your admin session expired. Please sign in again.';
+        this.auth.logout();
+      } else if (this.auth.isLoggedIn()) {
+        this.router.navigate(['/admin/dashboard']);
+      }
+    });
   }
 
   fillDefaults(): void {
@@ -39,6 +51,7 @@ export class AdminLoginComponent {
 
     this.isLoading = true;
     this.errorMessage = '';
+    this.sessionNotice = '';
 
     this.auth.login(this.username, this.password).subscribe({
       next: () => {

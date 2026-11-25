@@ -102,13 +102,24 @@ export class AdminDashboardComponent implements OnInit {
     this.loadRecords();
   }
 
+  handleAuthError(err: any): void {
+    if (err?.status === 401 || err?.status === 403 || err?.error?.detail?.includes('credentials')) {
+      console.warn('Admin credentials error, logging out and redirecting to login:', err);
+      this.auth.logout();
+      this.router.navigate(['/admin/login'], { queryParams: { expired: '1' } });
+    }
+  }
+
   // --- LLM Methods ---
   loadLLMConfig(): void {
     this.adminService.getLLMConfig().subscribe({
       next: (cfg) => {
         this.llmConfig = cfg;
       },
-      error: (err) => console.error('Failed to load LLM config:', err)
+      error: (err) => {
+        console.error('Failed to load LLM config:', err);
+        this.handleAuthError(err);
+      }
     });
   }
 
@@ -146,7 +157,10 @@ export class AdminDashboardComponent implements OnInit {
   loadScraperRuns(): void {
     this.adminService.getScraperRuns(25).subscribe({
       next: (runs) => (this.scraperRuns = runs),
-      error: (err) => console.error('Failed to load scraper runs:', err)
+      error: (err) => {
+        console.error('Failed to load scraper runs:', err);
+        this.handleAuthError(err);
+      }
     });
   }
 
@@ -174,7 +188,10 @@ export class AdminDashboardComponent implements OnInit {
   loadStats(): void {
     this.adminService.getGeoStats().subscribe({
       next: (stats) => (this.stats = stats),
-      error: (err) => console.error('Failed to load geo stats:', err)
+      error: (err) => {
+        console.error('Failed to load geo stats:', err);
+        this.handleAuthError(err);
+      }
     });
   }
 
@@ -204,6 +221,7 @@ export class AdminDashboardComponent implements OnInit {
         this.isLoadingRecords = false;
         console.error('Failed to load geo records:', err);
         this.recordsNotice = 'Error loading records: ' + (err.error?.detail || err.message);
+        this.handleAuthError(err);
       }
     });
   }
@@ -316,7 +334,10 @@ export class AdminDashboardComponent implements OnInit {
   loadLogs(): void {
     this.adminService.getChatLogs(40, this.logIntentFilter || undefined, this.logSearchTerm || undefined).subscribe({
       next: (logs) => (this.chatLogs = logs),
-      error: (err) => console.error('Failed to load chat logs:', err)
+      error: (err) => {
+        console.error('Failed to load chat logs:', err);
+        this.handleAuthError(err);
+      }
     });
   }
 

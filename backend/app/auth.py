@@ -10,7 +10,7 @@ from app.db.session import AsyncSessionLocal
 from app.db.models import Admin
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30 # 30 days long-lived admin session
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/login")
 
