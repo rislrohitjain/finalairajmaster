@@ -1,13 +1,13 @@
 ---
 title: Finalairajmaster
 emoji: 🏛️
-colorFrom: orange
-colorTo: amber
+colorFrom: red
+colorTo: yellow
 sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-short_description: 'Rajasthan Administrative & Geographic Master with pgvector RAG'
+short_description: Rajasthan Geo Master & pgvector RAG AI Agent
 ---
 
 # finalairajmaster — Rajasthan Administrative & Geographic Master Portal
