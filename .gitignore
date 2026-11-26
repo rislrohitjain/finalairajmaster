@@ -45,5 +45,7 @@ frontend/.angular/
 Thumbs.db
 playwright_screenshots/
 *.png
-
 *.ico
+!frontend/public/*.png
+!frontend/public/*.ico
+!frontend/public/*.svg

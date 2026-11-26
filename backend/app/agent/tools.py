@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import List, Dict, Any, Optional
 from sqlalchemy import select, or_, func
@@ -8,11 +9,9 @@ from app.db.models import (
     Pincode
 )
 
-async def lookup_geographic_hierarchy(query: str) -> Dict[str, Any]:
-    """
-    High-precision fuzzy & exact search across all 6 Rajasthan geographic and administrative levels,
-    reconstructing full top-down and bottom-up lineage.
-    """
+logger = logging.getLogger(__name__)
+
+async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
     clean_query = query.strip()
     digits = re.findall(r"\b\d{6}\b", clean_query) # 6 digit pincode
 
@@ -365,3 +364,22 @@ async def lookup_geographic_hierarchy(query: str) -> Dict[str, Any]:
                 return result
 
     return result
+
+async def lookup_geographic_hierarchy(query: str) -> Dict[str, Any]:
+    """
+    High-precision fuzzy & exact search across all 6 Rajasthan geographic and administrative levels,
+    reconstructing full top-down and bottom-up lineage.
+    """
+    try:
+        return await _lookup_geographic_hierarchy_impl(query)
+    except Exception as e:
+        logger.warning(f"Error in lookup_geographic_hierarchy: {e}")
+        return {
+            "matched": False,
+            "entity_type": None,
+            "entity_name": None,
+            "lineage": {},
+            "breadcrumbs": [],
+            "details": {},
+            "raw_matches": []
+        }

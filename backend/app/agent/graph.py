@@ -105,24 +105,27 @@ def sanitize_structured_output(text: str) -> str:
     return cleaned.strip()
 
 async def get_active_llm_config() -> Dict[str, Any]:
-    async with AsyncSessionLocal() as session:
-        res = await session.execute(select(LLMSetting).where(LLMSetting.id == 1))
-        cfg = res.scalar_one_or_none()
-        if cfg:
-            return {
-                "active_model": cfg.active_model,
-                "temperature": cfg.temperature,
-                "max_tokens": cfg.max_tokens,
-                "system_prompt": cfg.system_prompt,
-                "greeting_message": cfg.greeting_message,
-                "support_phone": cfg.support_phone or settings.SUPPORT_PHONE,
-                "enable_rag": cfg.enable_rag if cfg.enable_rag is not None else True,
-                "rag_top_k": cfg.rag_top_k or 5,
-                "enable_web_search": cfg.enable_web_search if cfg.enable_web_search is not None else True,
-                "web_search_provider": cfg.web_search_provider or "duckduckgo",
-                "web_search_api_key": cfg.web_search_api_key or "",
-                "web_search_max_results": cfg.web_search_max_results or 4
-            }
+    try:
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(select(LLMSetting).where(LLMSetting.id == 1))
+            cfg = res.scalar_one_or_none()
+            if cfg:
+                return {
+                    "active_model": cfg.active_model,
+                    "temperature": cfg.temperature,
+                    "max_tokens": cfg.max_tokens,
+                    "system_prompt": cfg.system_prompt,
+                    "greeting_message": cfg.greeting_message,
+                    "support_phone": cfg.support_phone or settings.SUPPORT_PHONE,
+                    "enable_rag": cfg.enable_rag if cfg.enable_rag is not None else True,
+                    "rag_top_k": cfg.rag_top_k or 5,
+                    "enable_web_search": cfg.enable_web_search if cfg.enable_web_search is not None else True,
+                    "web_search_provider": cfg.web_search_provider or "duckduckgo",
+                    "web_search_api_key": cfg.web_search_api_key or "",
+                    "web_search_max_results": cfg.web_search_max_results or 4
+                }
+    except Exception as e:
+        logger.warning(f"Could not load LLMSetting from DB: {e}")
     return {
         "active_model": settings.DEFAULT_OLLAMA_MODEL,
         "temperature": 0.2,

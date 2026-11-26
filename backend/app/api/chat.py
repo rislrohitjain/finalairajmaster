@@ -307,7 +307,18 @@ async def chat_endpoint(req: ChatRequest):
         "next_questions": []
     }
 
-    agent_result = await rajmaster_agent.ainvoke(initial_state)
+    try:
+        agent_result = await rajmaster_agent.ainvoke(initial_state)
+    except Exception as e:
+        logger.warning(f"Agent execution error: {e}")
+        agent_result = {
+            "intent": "geographic_query",
+            "response_text": f"Rajasthan Administrative Master Directory:\n\nRegarding your query about '{req.query}': The system is currently operating in resilience mode. For authoritative governance lineage and contacts across Rajasthan's 10 Divisions and 50 Districts, please call the official citizen helpline: {settings.SUPPORT_PHONE}.",
+            "breadcrumbs": ["Rajasthan", "Governance Support"],
+            "next_questions": ["List all 10 divisions of Rajasthan", "Which division does Balotra belong to?", "Details of pincode 302001"],
+            "helpline_card": True,
+            "support_phone": settings.SUPPORT_PHONE
+        }
     response_text = agent_result.get("response_text", "").strip()
 
     # If in Hugging Face mode and agent had no response, use generate_chat_reply
