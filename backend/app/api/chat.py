@@ -47,11 +47,14 @@ async def get_capabilities():
     """Returns official information on the 6 Rajasthan administrative levels and sample questions"""
     phone = settings.SUPPORT_PHONE
     greeting = "Welcome here chat with Jain's only"
-    async with AsyncSessionLocal() as session:
-        cfg = (await session.execute(select(LLMSetting).where(LLMSetting.id == 1))).scalar_one_or_none()
-        if cfg:
-            phone = cfg.support_phone or phone
-            greeting = cfg.greeting_message or greeting
+    try:
+        async with AsyncSessionLocal() as session:
+            cfg = (await session.execute(select(LLMSetting).where(LLMSetting.id == 1))).scalar_one_or_none()
+            if cfg:
+                phone = cfg.support_phone or phone
+                greeting = cfg.greeting_message or greeting
+    except Exception as e:
+        pass
 
     return {
         "title": "Rajasthan Administrative & Geographic Master Support System",
