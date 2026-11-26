@@ -27,7 +27,10 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Startup DB check notice: {e}")
     yield
     logger.info("Shutting down database connection engine...")
-    await async_engine.dispose()
+    try:
+        await async_engine.dispose()
+    except Exception as e:
+        logger.warning(f"Engine dispose notice: {e}")
 
 app = FastAPI(
     title="Rajasthan Administrative & Geographic Master (finalairajmaster)",
