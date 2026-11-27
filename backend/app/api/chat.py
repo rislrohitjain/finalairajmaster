@@ -42,6 +42,22 @@ class ChatResponse(BaseModel):
     support_phone: str
     latency_ms: int
 
+@router.get("/llm/status")
+async def get_llm_status():
+    """Returns the active LLM engine status, provider, and cloud readiness"""
+    from app.llm_client import get_active_llm_info
+    return {
+        "status": "online",
+        "llm_engine": get_active_llm_info(),
+        "supported_cloud_providers": [
+            {"provider": "google_gemini", "env_key": "GEMINI_API_KEY", "model": "gemini-1.5-flash"},
+            {"provider": "groq", "env_key": "GROQ_API_KEY", "model": "llama-3.3-70b-versatile"},
+            {"provider": "huggingface", "env_key": "HF_TOKEN", "model": "meta-llama/Llama-3.2-3B-Instruct"},
+            {"provider": "openai", "env_key": "OPENAI_API_KEY", "model": "gpt-4o-mini"}
+        ],
+        "zero_hallucination_engine": "Rajasthan LangGraph Deterministic 6-Tier Master Synthesizer"
+    }
+
 @router.get("/capabilities")
 async def get_capabilities():
     """Returns official information on the 6 Rajasthan administrative levels and sample questions"""

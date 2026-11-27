@@ -67,6 +67,40 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     this.aboutLangTab = lang;
   }
 
+  // Text Chat Flow Modal State
+  isTextFlowModalOpen: boolean = false;
+  textFlowLangTab: 'en' | 'hi' = 'en';
+
+  openTextFlowModal(): void {
+    this.isTextFlowModalOpen = true;
+    this.textFlowLangTab = this.selectedLanguage === 'hi' ? 'hi' : 'en';
+  }
+
+  closeTextFlowModal(): void {
+    this.isTextFlowModalOpen = false;
+  }
+
+  setTextFlowLangTab(lang: 'en' | 'hi'): void {
+    this.textFlowLangTab = lang;
+  }
+
+  // Audio / Voice Flow Modal State
+  isAudioFlowModalOpen: boolean = false;
+  audioFlowLangTab: 'en' | 'hi' = 'en';
+
+  openAudioFlowModal(): void {
+    this.isAudioFlowModalOpen = true;
+    this.audioFlowLangTab = this.selectedLanguage === 'hi' ? 'hi' : 'en';
+  }
+
+  closeAudioFlowModal(): void {
+    this.isAudioFlowModalOpen = false;
+  }
+
+  setAudioFlowLangTab(lang: 'en' | 'hi'): void {
+    this.audioFlowLangTab = lang;
+  }
+
   // 100+ Questions Modal State
   isQuestionsModalOpen: boolean = false;
   selectedCategory: string = 'All';
@@ -408,6 +442,8 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   askQuestion(questionText: string): void {
     this.closeQuestionsModal();
     this.closeAboutModal();
+    this.closeTextFlowModal();
+    this.closeAudioFlowModal();
     this.inputQuery = questionText;
     this.sendMessage();
   }
