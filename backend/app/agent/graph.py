@@ -447,6 +447,9 @@ def format_natural_language_lineage(
         # 1. Location Narrative
         if "pincode" in etype or (pincode and pincode in entity_name):
             area = lineage.get("area_or_village") or details.get("city_or_village") or "संबंधित"
+            offices = details.get("offices") or lineage.get("offices") or ""
+            localities = details.get("localities") or ""
+            total_offices = details.get("total_offices") or 0
             local_body_desc = ""
             if ulb and gp:
                 local_body_desc = f", जिसमें शहरी क्षेत्रों का नागरिक प्रशासन {ulb} तथा ग्रामीण क्षेत्रों का प्रबंधन {gp} ग्राम पंचायत द्वारा किया जाता है"
@@ -456,9 +459,11 @@ def format_natural_language_lineage(
                 local_body_desc = f", जिसका स्थानीय ग्रामीण प्रशासन {gp} ग्राम पंचायत द्वारा संचालित होता है"
 
             teh_txt = f" यह {tehsil} तहसील एवं ब्लॉक के अधिकार क्षेत्र में आता है{local_body_desc}।" if tehsil else ""
+            office_txt = f"\n\n📮 डाकघर एवं क्षेत्र ({total_offices} डाकघर): {offices[:450]}" if offices else ""
+            loc_txt = f"\n📍 प्रमुख ग्राम / मोहल्ले: {localities[:350]}" if localities else ""
             narrative = (
                 f"डाक पिनकोड {pincode} राजस्थान के {area} क्षेत्र को सेवा प्रदान करता है। "
-                f"प्रशासनिक दृष्टि से यह क्षेत्र {translate_crumb(div, 'hi')} के अंतर्गत {dist} जिले में स्थित है।{teh_txt}"
+                f"प्रशासनिक दृष्टि से यह क्षेत्र {translate_crumb(div, 'hi')} के अंतर्गत {dist} जिले में स्थित है।{teh_txt}{office_txt}{loc_txt}"
             )
         elif "village" in etype:
             patwar_txt = f" और {patwar} पटवार सर्कल" if patwar else ""
@@ -563,6 +568,9 @@ def format_natural_language_lineage(
         # 1. Location Narrative
         if "pincode" in etype or (pincode and pincode in entity_name):
             area = lineage.get("area_or_village") or details.get("city_or_village") or "specified"
+            offices = details.get("offices") or lineage.get("offices") or ""
+            localities = details.get("localities") or ""
+            total_offices = details.get("total_offices") or 0
             local_body_desc = ""
             if ulb and gp:
                 local_body_desc = f", jisme urban civic services {ulb} dwara aur rural areas {gp} Gram Panchayat dwara govern hote hain"
@@ -572,9 +580,11 @@ def format_natural_language_lineage(
                 local_body_desc = f", jiska local administration {gp} Gram Panchayat sambhalti hai"
 
             teh_txt = f" Yeh {tehsil} Tehsil & Block ke jurisdiction mein aata hai{local_body_desc}." if tehsil else ""
+            office_txt = f"\n\n📮 Post Offices ({total_offices}): {offices[:450]}" if offices else ""
+            loc_txt = f"\n📍 Covered Localities / Villages: {localities[:350]}" if localities else ""
             narrative = (
                 f"Postal Pincode {pincode} Rajasthan ke {area} area ko cover karta hai. "
-                f"Administrative view se yeh {div} ke andar {dist} district mein sthit hai.{teh_txt}"
+                f"Administrative view se yeh {div} ke andar {dist} district mein sthit hai.{teh_txt}{office_txt}{loc_txt}"
             )
         elif "village" in etype:
             patwar_txt = f" aur {patwar} Patwar Circle" if patwar else ""
@@ -677,6 +687,9 @@ def format_natural_language_lineage(
         # 1. Location Narrative
         if "pincode" in etype or (pincode and pincode in entity_name):
             area = lineage.get("area_or_village") or details.get("city_or_village") or "designated"
+            offices = details.get("offices") or lineage.get("offices") or ""
+            localities = details.get("localities") or ""
+            total_offices = details.get("total_offices") or 0
             local_body_desc = ""
             if ulb and gp:
                 local_body_desc = f", with civic administration overseen by {ulb} for urban zones and {gp} Gram Panchayat for rural sectors"
@@ -686,9 +699,11 @@ def format_natural_language_lineage(
                 local_body_desc = f", governed locally by the {gp} Gram Panchayat"
 
             teh_txt = f" It falls under the jurisdiction of {tehsil} Tehsil & Block{local_body_desc}." if tehsil else ""
+            office_txt = f"\n\n📮 Post Offices ({total_offices}): {offices[:450]}" if offices else ""
+            loc_txt = f"\n📍 Covered Localities / Villages: {localities[:350]}" if localities else ""
             narrative = (
                 f"Postal Pincode {pincode} serves the {area} area in Rajasthan. "
-                f"Administratively, this postal zone is situated in the {div} within {dist} district.{teh_txt}"
+                f"Administratively, this postal zone is situated in the {div} within {dist} district.{teh_txt}{office_txt}{loc_txt}"
             )
         elif "village" in etype:
             patwar_txt = f" and {patwar} Patwar Circle" if patwar else ""

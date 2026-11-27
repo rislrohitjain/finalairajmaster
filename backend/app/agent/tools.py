@@ -1,7 +1,7 @@
 import logging
 import re
 from typing import List, Dict, Any, Optional
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, func, text
 from app.db.session import AsyncSessionLocal
 from app.db.models import (
     State, Division, District, SubDivision, TehsilBlock,
@@ -49,12 +49,135 @@ STOP_WORDS = {
     "comes", "come", "fall", "falls", "role", "duties", "jurisdiction", "officials", "official",
     "collector", "collectorate", "pramukh", "tehsildar", "bdo", "sarpanch", "patwari", "commissioner",
     "sdm", "sdo", "board", "area", "town", "circle", "revenue",
+    "pincode", "pin", "code", "postal", "post", "office", "zip",
     # Hindi stop words
     "क्या", "कहाँ", "कौन", "किस", "किसे", "कितने", "बताएं", "बताओ", "की", "का", "के", "में",
     "है", "हैं", "आता", "आती", "आते", "पड़ता", "पड़ती", "गांव", "तहसील", "जिला", "संभाग",
     "उपखंड", "ब्लॉक", "पंचायत", "समिति", "नगर", "निगम", "परिषद", "पालिका", "प्रशासनिक",
-    "वंशावली", "पदानुक्रम", "विवरण", "जानकारी", "अधिकार", "क्षेत्र", "अध्यक्ष", "प्रधान"
+    "वंशावली", "पदानुक्रम", "विवरण", "जानकारी", "अधिकार", "क्षेत्र", "अध्यक्ष", "प्रधान",
+    "पिनकोड", "डाक"
 }
+
+async def _build_pincode_result(session, p_item: Pincode, matched_locality: Optional[str] = None) -> Dict[str, Any]:
+    dist = None
+    div = None
+    tb = None
+    ulb = None
+    gp = None
+
+    if p_item.district_id:
+        dist = (await session.execute(select(District).where(District.id == p_item.district_id))).scalar_one_or_none()
+    if p_item.division_id:
+        div = (await session.execute(select(Division).where(Division.id == p_item.division_id))).scalar_one_or_none()
+    elif dist and dist.division_id:
+        div = (await session.execute(select(Division).where(Division.id == dist.division_id))).scalar_one_or_none()
+    if p_item.tehsil_block_id:
+        tb = (await session.execute(select(TehsilBlock).where(TehsilBlock.id == p_item.tehsil_block_id))).scalar_one_or_none()
+    if p_item.ulb_id:
+        ulb = (await session.execute(select(UrbanLocalBody).where(UrbanLocalBody.id == p_item.ulb_id))).scalar_one_or_none()
+    if p_item.gram_panchayat_id:
+        gp = (await session.execute(select(GramPanchayat).where(GramPanchayat.id == p_item.gram_panchayat_id))).scalar_one_or_none()
+
+    meta = p_item.metadata_json if isinstance(p_item.metadata_json, dict) else {}
+    offices_str = meta.get("offices") or ""
+    localities_str = meta.get("localities") or meta.get("locality") or ""
+    subdist_name = meta.get("subdistrict") or meta.get("tehsil_or_zone") or (tb.name_en if tb else None)
+    total_offices = meta.get("total_offices") or (len([o for o in offices_str.split(",") if o.strip()]) if offices_str else 0)
+    total_localities = meta.get("total_localities") or 0
+
+    # Enrich from raj_masters.pincode_localities if available
+    rm_offices: List[str] = []
+    rm_localities: List[str] = []
+    try:
+        rm_res = await session.execute(
+            text("""
+                SELECT DISTINCT office_name, locality_name, subdist_name, district_name
+                FROM raj_masters.pincode_localities
+                WHERE pincode = :pin
+                ORDER BY office_name, locality_name
+                LIMIT 100
+            """),
+            {"pin": p_item.pincode}
+        )
+        rm_rows = rm_res.mappings().all()
+        if rm_rows:
+            seen_o = set()
+            seen_l = set()
+            for r in rm_rows:
+                o_nm = (r["office_name"] or "").strip()
+                l_nm = (r["locality_name"] or "").strip()
+                if o_nm and o_nm not in seen_o:
+                    seen_o.add(o_nm)
+                    rm_offices.append(o_nm)
+                if l_nm and l_nm not in seen_l:
+                    seen_l.add(l_nm)
+                    rm_localities.append(l_nm)
+            if not subdist_name and rm_rows[0].get("subdist_name"):
+                subdist_name = rm_rows[0]["subdist_name"]
+    except Exception:
+        pass
+
+    final_offices = offices_str or ", ".join(rm_offices)
+    final_localities = localities_str or ", ".join(rm_localities[:40])
+    if not total_offices and rm_offices:
+        total_offices = len(rm_offices)
+    if not total_localities and rm_localities:
+        total_localities = len(rm_localities)
+
+    dist_name = dist.name_en if dist else (meta.get("district") or "Rajasthan")
+    div_name = div.name_en if div else (meta.get("division") or "Rajasthan")
+    tehsil_name = tb.name_en if tb else subdist_name
+
+    area_label = p_item.city_or_village
+    if matched_locality and matched_locality.lower() not in area_label.lower():
+        area_label = f"{matched_locality} — {area_label}"
+
+    lineage = {
+        "state": "Rajasthan",
+        "division": div_name,
+        "district": dist_name,
+        "tehsil_or_block": tehsil_name,
+        "ulb": ulb.name_en if ulb else None,
+        "gram_panchayat": gp.name_en if gp else None,
+        "area_or_village": area_label,
+        "pincode": p_item.pincode,
+        "offices": final_offices[:500] if final_offices else None,
+        "total_offices": total_offices or None,
+    }
+    breadcrumbs = [x for x in [
+        "Rajasthan",
+        div_name if div_name != "Rajasthan" else None,
+        dist_name if dist_name != "Rajasthan" else None,
+        tehsil_name,
+        lineage.get("ulb") or lineage.get("gram_panchayat"),
+        f"Pincode {p_item.pincode}"
+    ] if x]
+
+    return {
+        "matched": True,
+        "entity_type": "Pincode",
+        "entity_name": f"Pincode {p_item.pincode} ({area_label})",
+        "lineage": lineage,
+        "breadcrumbs": breadcrumbs,
+        "details": {
+            "pincode": p_item.pincode,
+            "city_or_village": area_label,
+            "district": dist_name,
+            "division": div_name,
+            "tehsil": tehsil_name,
+            "subdistrict": subdist_name,
+            "ulb": ulb.name_en if ulb else None,
+            "gram_panchayat": gp.name_en if gp else None,
+            "offices": final_offices,
+            "localities": final_localities,
+            "total_offices": total_offices,
+            "total_localities": total_localities,
+            "postal_circle": meta.get("circle") or "Rajasthan Postal Circle",
+            "zila_pramukh": dist.zila_pramukh if dist else None,
+            "collectorate": dist.collectorate_details if dist else None,
+        },
+        "raw_matches": []
+    }
 
 async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
     clean_query = query.strip()
@@ -71,64 +194,33 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
     }
 
     async with AsyncSessionLocal() as session:
-        # 1. Pincode Search
+        # 1. Exact 6-digit Pincode Search
         if digits:
             pin = digits[0]
             stmt = select(Pincode).where(Pincode.pincode == pin).limit(5)
             pin_rows = (await session.execute(stmt)).scalars().all()
             if pin_rows:
-                p_item = pin_rows[0]
-                result["matched"] = True
-                result["entity_type"] = "Pincode"
-                result["entity_name"] = f"Pincode {p_item.pincode} ({p_item.city_or_village})"
-                
-                # Fetch parents
-                dist = None
-                div = None
-                tb = None
-                ulb = None
-                gp = None
+                return await _build_pincode_result(session, pin_rows[0])
 
-                if p_item.district_id:
-                    dist = (await session.execute(select(District).where(District.id == p_item.district_id))).scalar_one_or_none()
-                if p_item.division_id:
-                    div = (await session.execute(select(Division).where(Division.id == p_item.division_id))).scalar_one_or_none()
-                elif dist and dist.division_id:
-                    div = (await session.execute(select(Division).where(Division.id == dist.division_id))).scalar_one_or_none()
-                if p_item.tehsil_block_id:
-                    tb = (await session.execute(select(TehsilBlock).where(TehsilBlock.id == p_item.tehsil_block_id))).scalar_one_or_none()
-                if p_item.ulb_id:
-                    ulb = (await session.execute(select(UrbanLocalBody).where(UrbanLocalBody.id == p_item.ulb_id))).scalar_one_or_none()
-                if p_item.gram_panchayat_id:
-                    gp = (await session.execute(select(GramPanchayat).where(GramPanchayat.id == p_item.gram_panchayat_id))).scalar_one_or_none()
-
-                lineage = {
-                    "state": "Rajasthan",
-                    "division": div.name_en if div else "Jaipur Division",
-                    "district": dist.name_en if dist else "Jaipur",
-                    "tehsil_or_block": tb.name_en if tb else None,
-                    "ulb": ulb.name_en if ulb else None,
-                    "gram_panchayat": gp.name_en if gp else None,
-                    "area_or_village": p_item.city_or_village,
-                    "pincode": p_item.pincode
-                }
-                result["lineage"] = lineage
-                result["breadcrumbs"] = [x for x in [
-                    "Rajasthan",
-                    lineage.get("division"),
-                    lineage.get("district"),
-                    lineage.get("tehsil_or_block"),
-                    lineage.get("ulb") or lineage.get("gram_panchayat"),
-                    p_item.city_or_village
-                ] if x]
-                result["details"] = {
-                    "pincode": p_item.pincode,
-                    "city_or_village": p_item.city_or_village,
-                    "district": dist.name_en if dist else None,
-                    "zila_pramukh": dist.zila_pramukh if dist else None,
-                    "collectorate": dist.collectorate_details if dist else None
-                }
-                return result
+            # Fallback check in raj_masters.pincode_localities if not in public.pincodes
+            try:
+                rm_row = (await session.execute(
+                    text("SELECT pincode, office_name, locality_name, subdist_name, district_name FROM raj_masters.pincode_localities WHERE pincode = :pin LIMIT 1"),
+                    {"pin": pin}
+                )).mappings().first()
+                if rm_row:
+                    temp_pin = Pincode(
+                        pincode=pin,
+                        city_or_village=rm_row.get("locality_name") or rm_row.get("office_name") or pin,
+                        metadata_json={
+                            "district": rm_row.get("district_name"),
+                            "subdistrict": rm_row.get("subdist_name"),
+                            "offices": rm_row.get("office_name"),
+                        }
+                    )
+                    return await _build_pincode_result(session, temp_pin)
+            except Exception:
+                pass
 
         # 2. Check for State-Level, Division-Overview, or Districts-List Specific Queries
         q_lower = clean_query.lower()
@@ -219,6 +311,53 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
 
         if not terms_to_try:
             terms_to_try = [clean_query]
+
+        is_pincode_intent = any(k in q_lower for k in ["pincode", "pin code", "postal", "post office", "पिनकोड", "डाक"])
+
+        async def _search_pincode_by_place(term_str: str):
+            st_term = f"%{term_str}%"
+            # Check raj_masters.pincode_localities first for exact/close locality or post office match
+            try:
+                rm_loc = (await session.execute(
+                    text("""
+                        SELECT pincode, locality_name, office_name
+                        FROM raj_masters.pincode_localities
+                        WHERE locality_name ILIKE :t OR office_name ILIKE :t OR subdist_name ILIKE :t
+                        ORDER BY
+                            CASE WHEN LOWER(locality_name) = LOWER(:exact) THEN 0
+                                 WHEN LOWER(office_name) = LOWER(:exact) THEN 1
+                                 WHEN locality_name ILIKE :prefix THEN 2
+                                 ELSE 3 END,
+                            pincode ASC
+                        LIMIT 1
+                    """),
+                    {"t": st_term, "exact": term_str, "prefix": f"{term_str}%"}
+                )).mappings().first()
+                if rm_loc:
+                    p_obj = (await session.execute(select(Pincode).where(Pincode.pincode == rm_loc["pincode"]))).scalar_one_or_none()
+                    if p_obj:
+                        return await _build_pincode_result(session, p_obj, matched_locality=rm_loc["locality_name"] or rm_loc["office_name"])
+            except Exception:
+                pass
+
+            # Check public.pincodes directly
+            p_obj = (await session.execute(
+                select(Pincode).where(
+                    or_(
+                        Pincode.city_or_village.ilike(st_term),
+                        func.cast(Pincode.metadata_json, Pincode.city_or_village.type).ilike(st_term)
+                    )
+                ).order_by(Pincode.pincode.asc()).limit(1)
+            )).scalar_one_or_none()
+            if p_obj:
+                return await _build_pincode_result(session, p_obj)
+            return None
+
+        if is_pincode_intent:
+            for term in terms_to_try:
+                p_res = await _search_pincode_by_place(term)
+                if p_res:
+                    return p_res
 
         for term in terms_to_try:
             sterm = f"%{term}%"
@@ -400,6 +539,13 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                     "lgd_code": div.lgd_code
                 }
                 return result
+
+        # 4. Fallback: search Pincode localities/offices for any unmatched place name (e.g., "Saran Nagar", "Bhiwari")
+        if not is_pincode_intent:
+            for term in terms_to_try:
+                p_res = await _search_pincode_by_place(term)
+                if p_res:
+                    return p_res
 
     return result
 

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, desc, update
+from sqlalchemy import select, func, desc, update, cast, Text
 from app.db.session import AsyncSessionLocal
 from app.db.models import (
     Admin, LLMSetting, ScraperRun, ChatLog,
@@ -639,13 +639,27 @@ async def _fetch_geo_records(level: str, search: Optional[str], limit: int, offs
                 })
 
         elif level == "pincode":
-            query = select(Pincode, District.name_en.label("dist_name")).outerjoin(District, Pincode.district_id == District.id).order_by(Pincode.id)
+            query = select(Pincode, District.name_en.label("dist_name"), TehsilBlock.name_en.label("tb_name")).outerjoin(District, Pincode.district_id == District.id).outerjoin(TehsilBlock, Pincode.tehsil_block_id == TehsilBlock.id).order_by(Pincode.pincode)
             if search:
-                query = query.where(Pincode.pincode.ilike(f"%{search}%") | Pincode.city_or_village.ilike(f"%{search}%"))
+                sterm = f"%{search}%"
+                query = query.where(
+                    Pincode.pincode.ilike(sterm)
+                    | Pincode.city_or_village.ilike(sterm)
+                    | District.name_en.ilike(sterm)
+                    | TehsilBlock.name_en.ilike(sterm)
+                    | cast(Pincode.metadata_json, Text).ilike(sterm)
+                )
             count_q = select(func.count()).select_from(query.subquery())
             total = (await session.execute(count_q)).scalar_one()
             res = (await session.execute(query.offset(offset).limit(limit))).all()
-            for p, dist_name in res:
+            for p, dist_name, tb_name in res:
+                meta = p.metadata_json if isinstance(p.metadata_json, dict) else {}
+                total_offices = meta.get("total_offices")
+                offices_preview = (meta.get("offices") or "")[:90]
+                auth_parts = [f"Post Offices: {total_offices}" if total_offices else f"Postal Zone ({p.pincode})"]
+                if offices_preview:
+                    auth_parts.append(offices_preview)
+                parent_str = f"Tehsil: {tb_name}, District: {dist_name or meta.get('district') or 'Rajasthan'}" if tb_name else f"District: {dist_name or meta.get('district') or 'Rajasthan'}"
                 records.append({
                     "id": p.id,
                     "level": "pincode",
@@ -653,8 +667,8 @@ async def _fetch_geo_records(level: str, search: Optional[str], limit: int, offs
                     "name_hi": f"{p.pincode} ({p.city_or_village})",
                     "code": p.pincode,
                     "lgd_code": None,
-                    "parent_name": f"District: {dist_name or 'Rajasthan'}",
-                    "authority_details": f"Postal Sub-Office / Head Post Office ({p.pincode})",
+                    "parent_name": parent_str,
+                    "authority_details": " • ".join(auth_parts),
                     "pincode": p.pincode,
                     "extra_type": "Postal Code"
                 })

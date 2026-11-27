@@ -687,30 +687,34 @@ async def seed_initial_data():
                 session.add(uw_obj)
         await session.commit()
 
-        # 12. Pincodes
+        # 12. Pincodes (Insert only missing fallback entries; resolve district/division by name)
+        dist_rows = (await session.execute(select(District))).scalars().all()
+        dist_by_name = {d.name_en.lower().strip(): d for d in dist_rows}
+        div_rows = (await session.execute(select(Division))).scalars().all()
+        div_by_name = {dv.name_en.lower().strip(): dv for dv in div_rows}
+
+        fb_dist_name_by_rid = {d["rajmaster_id"]: d["name_en"].lower().strip() for d in FALLBACK_DISTRICTS}
+        fb_div_name_by_rid = {dv["rajmaster_id"]: dv["name_en"].lower().strip() for dv in FALLBACK_DIVISIONS}
+
         for p in FALLBACK_PINCODES:
             res = await session.execute(select(Pincode).filter_by(pincode=p["pincode"]))
             existing = res.scalar_one_or_none()
             if not existing:
+                d_name = fb_dist_name_by_rid.get(p.get("district_id"), "")
+                dv_name = fb_div_name_by_rid.get(p.get("division_id"), "")
+                d_obj = dist_by_name.get(d_name)
+                dv_obj = div_by_name.get(dv_name)
                 p_obj = Pincode(
                     pincode=p["pincode"],
                     city_or_village=p["city_or_village"],
-                    district_id=p.get("district_id"),
-                    division_id=p.get("division_id"),
+                    district_id=d_obj.id if d_obj else None,
+                    division_id=dv_obj.id if dv_obj else (d_obj.division_id if d_obj else None),
                     tehsil_block_id=p.get("tehsil_block_id"),
                     ulb_id=p.get("ulb_id"),
                     gram_panchayat_id=p.get("gram_panchayat_id"),
                     metadata_json={"source": "seed"}
                 )
                 session.add(p_obj)
-            else:
-                existing.city_or_village = p["city_or_village"]
-                existing.district_id = p.get("district_id")
-                existing.division_id = p.get("division_id")
-                if p.get("tehsil_block_id"):
-                    existing.tehsil_block_id = p.get("tehsil_block_id")
-                if p.get("ulb_id"):
-                    existing.ulb_id = p.get("ulb_id")
         await session.commit()
 
     print("Initial seed data populated successfully.")
