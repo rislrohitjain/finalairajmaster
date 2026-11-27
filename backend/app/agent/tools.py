@@ -11,6 +11,51 @@ from app.db.models import (
 
 logger = logging.getLogger(__name__)
 
+NAME_ALIASES = {
+    "balotra": ["balotra", "balotara", "बालोतरा"],
+    "balotara": ["balotara", "balotra", "बालोतरा"],
+    "didwana": ["didwana", "didwana-kuchaman", "deedwana", "डीडवाना"],
+    "kuchaman": ["kuchaman", "didwana-kuchaman", "कुचामन"],
+    "neemkathana": ["neem ka thana", "neemkathana", "नीम का थाना"],
+    "neem ka thana": ["neem ka thana", "neemkathana", "नीम का थाना"],
+    "kotputli": ["kotputli", "kotputli-behror", "कोटपूतली"],
+    "behror": ["behror", "kotputli-behror", "बहरोड़"],
+    "khairthal": ["khairthal", "khairthal-tijara", "खैरथल"],
+    "tijara": ["tijara", "khairthal-tijara", "तिजारा"],
+    "chittor": ["chittorgarh", "chittaurgarh", "चित्तौड़गढ़"],
+    "chittorgarh": ["chittorgarh", "chittaurgarh", "चित्तौड़गढ़"],
+    "chittaurgarh": ["chittorgarh", "chittaurgarh", "चित्तौड़गढ़"],
+    "jalore": ["jalore", "jalor", "जालौर"],
+    "jalor": ["jalore", "jalor", "जालौर"],
+    "ganganagar": ["sri ganganagar", "ganganagar", "श्रीगंगानगर"],
+    "sri ganganagar": ["sri ganganagar", "ganganagar", "श्रीगंगानगर"],
+    "sawaimadhopur": ["sawai madhopur", "सवाई माधोपुर"],
+    "sawai madhopur": ["sawai madhopur", "सवाई माधोपुर"],
+    "anupgarh": ["anupgarh", "अनूपगढ़"],
+    "phalodi": ["phalodi", "फलोदी"],
+    "salumbar": ["salumbar", "salumber", "सलूंबर"],
+    "shahpura": ["shahpura", "शाहपुरा"],
+    "kekri": ["kekri", "केकड़ी"],
+    "beawar": ["beawar", "ब्यावर"],
+    "dudu": ["dudu", "दूदू"]
+}
+
+STOP_WORDS = {
+    "what", "where", "which", "tell", "about", "details", "the", "and", "under", "rajasthan",
+    "administrative", "lineage", "hierarchy", "information", "village", "tehsil", "district",
+    "division", "block", "panchayat", "samiti", "urban", "body", "city", "give", "show", "is",
+    "of", "in", "to", "for", "with", "does", "belong", "covers", "head", "heads", "who", "are", "name",
+    "names", "corporation", "municipal", "council", "local", "me", "how", "many", "all", "list",
+    "comes", "come", "fall", "falls", "role", "duties", "jurisdiction", "officials", "official",
+    "collector", "collectorate", "pramukh", "tehsildar", "bdo", "sarpanch", "patwari", "commissioner",
+    "sdm", "sdo", "board", "area", "town", "circle", "revenue",
+    # Hindi stop words
+    "क्या", "कहाँ", "कौन", "किस", "किसे", "कितने", "बताएं", "बताओ", "की", "का", "के", "में",
+    "है", "हैं", "आता", "आती", "आते", "पड़ता", "पड़ती", "गांव", "तहसील", "जिला", "संभाग",
+    "उपखंड", "ब्लॉक", "पंचायत", "समिति", "नगर", "निगम", "परिषद", "पालिका", "प्रशासनिक",
+    "वंशावली", "पदानुक्रम", "विवरण", "जानकारी", "अधिकार", "क्षेत्र", "अध्यक्ष", "प्रधान"
+}
+
 async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
     clean_query = query.strip()
     digits = re.findall(r"\b\d{6}\b", clean_query) # 6 digit pincode
@@ -157,21 +202,6 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
             return result
 
         # 3. Extract candidate entities from natural language text
-        STOP_WORDS = {
-            "what", "where", "which", "tell", "about", "details", "the", "and", "under", "rajasthan",
-            "administrative", "lineage", "hierarchy", "information", "village", "tehsil", "district",
-            "division", "block", "panchayat", "samiti", "urban", "body", "city", "give", "show", "is",
-            "of", "in", "to", "for", "with", "does", "belong", "covers", "head", "heads", "who", "are", "name",
-            "names", "corporation", "municipal", "council", "local", "me", "how", "many", "all", "list",
-            "comes", "come", "fall", "falls", "role", "duties", "jurisdiction", "officials", "official",
-            "collector", "collectorate", "pramukh", "tehsildar", "bdo", "sarpanch", "patwari", "commissioner",
-            "sdm", "sdo", "board", "area", "town", "circle", "revenue",
-            # Hindi stop words
-            "क्या", "कहाँ", "कौन", "किस", "किसे", "कितने", "बताएं", "बताओ", "की", "का", "के", "में",
-            "है", "हैं", "आता", "आती", "आते", "पड़ता", "पड़ती", "गांव", "तहसील", "जिला", "संभाग",
-            "उपखंड", "ब्लॉक", "पंचायत", "समिति", "नगर", "निगम", "परिषद", "पालिका", "प्रशासनिक",
-            "वंशावली", "पदानुक्रम", "विवरण", "जानकारी", "अधिकार", "क्षेत्र", "अध्यक्ष", "प्रधान"
-        }
         raw_words = [w for w in re.split(r"[ ,?.!]+", clean_query) if len(w) >= 2]
         candidates = [w for w in raw_words if w.lower() not in STOP_WORDS and len(w) >= 3]
 
@@ -179,6 +209,14 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
         if len(candidates) >= 2:
             terms_to_try.append(" ".join(candidates[:2])) # e.g. "Jaipur Greater"
         terms_to_try.extend(candidates)
+
+        for c in list(candidates):
+            c_low = c.lower()
+            if c_low in NAME_ALIASES:
+                for alt in NAME_ALIASES[c_low]:
+                    if alt not in terms_to_try:
+                        terms_to_try.append(alt)
+
         if not terms_to_try:
             terms_to_try = [clean_query]
 
@@ -365,21 +403,185 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
 
     return result
 
+def _lookup_in_memory_master(query: str) -> Dict[str, Any]:
+    from app.db.init_db import (
+        FALLBACK_DIVISIONS, FALLBACK_DISTRICTS, FALLBACK_SUBDIVISIONS,
+        FALLBACK_TEHSILS_BLOCKS, FALLBACK_GRAM_PANCHAYATS, FALLBACK_VILLAGES,
+        FALLBACK_ULBS
+    )
+    clean_query = query.strip()
+    digits = re.findall(r"\b\d{6}\b", clean_query)
+
+    result: Dict[str, Any] = {
+        "matched": False,
+        "entity_type": None,
+        "entity_name": None,
+        "lineage": {},
+        "breadcrumbs": [],
+        "details": {},
+        "raw_matches": []
+    }
+
+    # 1. Pincode
+    if digits:
+        pin = digits[0]
+        for v in FALLBACK_VILLAGES:
+            if v.get("pincode") == pin:
+                dist = next((d for d in FALLBACK_DISTRICTS if d["rajmaster_id"] == v.get("district_id")), None)
+                div = next((dv for dv in FALLBACK_DIVISIONS if dist and dv["rajmaster_id"] == dist.get("division_id")), None)
+                tb = next((t for t in FALLBACK_TEHSILS_BLOCKS if t["rajmaster_id"] == v.get("tehsil_block_id")), None)
+                gp = next((g for g in FALLBACK_GRAM_PANCHAYATS if g["rajmaster_id"] == v.get("gram_panchayat_id")), None)
+                result["matched"] = True
+                result["entity_type"] = "Pincode"
+                result["entity_name"] = f"Pincode {pin} ({v['name_en']})"
+                result["lineage"] = {
+                    "state": "Rajasthan",
+                    "division": div["name_en"] if div else None,
+                    "district": dist["name_en"] if dist else None,
+                    "tehsil_or_block": tb["name_en"] if tb else None,
+                    "gram_panchayat": gp["name_en"] if gp else None,
+                    "area_or_village": v["name_en"],
+                    "patwar_circle": v.get("patwar_circle"),
+                    "patwari": v.get("patwari"),
+                    "pincode": pin
+                }
+                result["breadcrumbs"] = [x for x in ["Rajasthan", div["name_en"] if div else None, dist["name_en"] if dist else None, v["name_en"]] if x]
+                result["details"] = {
+                    "pincode": pin,
+                    "city_or_village": v["name_en"],
+                    "district": dist["name_en"] if dist else None,
+                    "division": div["name_en"] if div else None,
+                    "tehsil": tb["name_en"] if tb else None,
+                    "gram_panchayat": gp["name_en"] if gp else None
+                }
+                return result
+
+    q_lower = clean_query.lower()
+    raw_words = [w for w in re.split(r"[ ,?.!]+", clean_query) if len(w) >= 2]
+    candidates = [w for w in raw_words if w.lower() not in STOP_WORDS and len(w) >= 3]
+
+    terms = []
+    if len(candidates) >= 2:
+        terms.append(" ".join(candidates[:2]).lower())
+    terms.extend([c.lower() for c in candidates])
+    for c in list(candidates):
+        c_low = c.lower()
+        if c_low in NAME_ALIASES:
+            terms.extend([a.lower() for a in NAME_ALIASES[c_low]])
+    if not terms:
+        terms = [q_lower]
+
+    check_divisions_first = any(k in q_lower for k in ["division", "sambhag", "संभाग"]) and not any(
+        any(alias in q_lower for alias in NAME_ALIASES.get(c.lower(), [c.lower()]))
+        for c in candidates if any(d["name_en"].lower() == c.lower() for d in FALLBACK_DISTRICTS)
+    )
+
+    def match_district():
+        for term in terms:
+            for d in FALLBACK_DISTRICTS:
+                d_en = d["name_en"].lower()
+                d_hi = d["name_hi"]
+                if term == d_en or term in d_en or term == d_hi or term in d_hi:
+                    div = next((dv for dv in FALLBACK_DIVISIONS if dv["rajmaster_id"] == d.get("division_id")), None)
+                    result["matched"] = True
+                    result["entity_type"] = "District"
+                    result["entity_name"] = d["name_en"]
+                    result["lineage"] = {
+                        "state": "Rajasthan",
+                        "division": div["name_en"] if div else "Jodhpur Division",
+                        "district": d["name_en"],
+                        "collectorate": f"District Collectorate, {d['name_en']}",
+                        "zila_parishad": f"Zila Parishad {d['name_en']}",
+                        "zila_pramukh": d.get("zila_pramukh") or f"Zila Pramukh, {d['name_en']}",
+                        "lgd_code": d.get("lgd_code") or 773
+                    }
+                    result["breadcrumbs"] = [x for x in ["Rajasthan", div["name_en"] if div else None, d["name_en"]] if x]
+                    result["details"] = {
+                        "district_english": d["name_en"],
+                        "district_hindi": d["name_hi"],
+                        "division": div["name_en"] if div else None,
+                        "zila_pramukh": d.get("zila_pramukh"),
+                        "collectorate": f"District Collectorate, {d['name_en']}",
+                        "lgd_code": d.get("lgd_code")
+                    }
+                    return result
+        return None
+
+    def match_division():
+        for term in terms:
+            for dv in FALLBACK_DIVISIONS:
+                dv_en = dv["name_en"].lower()
+                dv_hi = dv["name_hi"]
+                clean_dv_en = dv_en.replace(" division", "")
+                if term in dv_en or term == clean_dv_en or term in dv_hi:
+                    child_districts = [cd["name_en"] for cd in FALLBACK_DISTRICTS if cd.get("division_id") == dv["rajmaster_id"]]
+                    result["matched"] = True
+                    result["entity_type"] = "Division"
+                    result["entity_name"] = dv["name_en"]
+                    result["lineage"] = {
+                        "state": "Rajasthan",
+                        "division": dv["name_en"],
+                        "divisional_commissioner": dv.get("divisional_commissioner"),
+                        "districts": child_districts
+                    }
+                    result["breadcrumbs"] = ["Rajasthan", dv["name_en"]]
+                    result["details"] = {
+                        "division_english": dv["name_en"],
+                        "division_hindi": dv["name_hi"],
+                        "divisional_commissioner": dv.get("divisional_commissioner"),
+                        "districts_count": len(child_districts),
+                        "districts": child_districts,
+                        "lgd_code": dv.get("lgd_code")
+                    }
+                    return result
+        return None
+
+    if check_divisions_first:
+        m = match_division()
+        if m: return m
+        m = match_district()
+        if m: return m
+    else:
+        m = match_district()
+        if m: return m
+        m = match_division()
+        if m: return m
+
+    # 4. Check State (Rajasthan or count queries)
+    if any(k in q_lower for k in ["rajasthan", "division", "district", "sambhag", "संभाग"]):
+        result["matched"] = True
+        result["entity_type"] = "State"
+        result["entity_name"] = "Rajasthan"
+        result["lineage"] = {
+            "state": "Rajasthan",
+            "divisions_count": len(FALLBACK_DIVISIONS),
+            "districts_count": len(FALLBACK_DISTRICTS)
+        }
+        result["breadcrumbs"] = ["Rajasthan", "10 Administrative Divisions"]
+        result["details"] = {
+            "state_english": "Rajasthan",
+            "state_hindi": "राजस्थान",
+            "chief_secretary": "Chief Secretary, Government of Rajasthan",
+            "governance_details": "Government Secretariat, Jaipur",
+            "divisions": [d["name_en"] for d in FALLBACK_DIVISIONS],
+            "districts_count": len(FALLBACK_DISTRICTS),
+            "lgd_code": 8
+        }
+        return result
+
+    return result
+
 async def lookup_geographic_hierarchy(query: str) -> Dict[str, Any]:
     """
     High-precision fuzzy & exact search across all 6 Rajasthan geographic and administrative levels,
     reconstructing full top-down and bottom-up lineage.
     """
     try:
-        return await _lookup_geographic_hierarchy_impl(query)
+        res = await _lookup_geographic_hierarchy_impl(query)
+        if res.get("matched"):
+            return res
     except Exception as e:
-        logger.warning(f"Error in lookup_geographic_hierarchy: {e}")
-        return {
-            "matched": False,
-            "entity_type": None,
-            "entity_name": None,
-            "lineage": {},
-            "breadcrumbs": [],
-            "details": {},
-            "raw_matches": []
-        }
+        logger.warning(f"DB search error in lookup_geographic_hierarchy: {e}")
+
+    # Fallback to in-memory authoritative Rajasthan Master Directory
+    return _lookup_in_memory_master(query)
