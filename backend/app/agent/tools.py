@@ -407,7 +407,7 @@ def _lookup_in_memory_master(query: str) -> Dict[str, Any]:
     from app.db.init_db import (
         FALLBACK_DIVISIONS, FALLBACK_DISTRICTS, FALLBACK_SUBDIVISIONS,
         FALLBACK_TEHSILS_BLOCKS, FALLBACK_GRAM_PANCHAYATS, FALLBACK_VILLAGES,
-        FALLBACK_ULBS
+        FALLBACK_ULBS, FALLBACK_PINCODES
     )
     clean_query = query.strip()
     digits = re.findall(r"\b\d{6}\b", clean_query)
@@ -422,9 +422,77 @@ def _lookup_in_memory_master(query: str) -> Dict[str, Any]:
         "raw_matches": []
     }
 
-    # 1. Pincode
+    RAJASTHAN_PIN_PREFIX_MAP = {
+        "301": {"district": "Alwar / Khairthal-Tijara / Kotputli", "division": "Jaipur Division"},
+        "302": {"district": "Jaipur", "division": "Jaipur Division"},
+        "303": {"district": "Jaipur Rural / Dausa / Dudu", "division": "Jaipur Division"},
+        "304": {"district": "Tonk", "division": "Ajmer Division"},
+        "305": {"district": "Ajmer / Beawar / Kekri", "division": "Ajmer Division"},
+        "306": {"district": "Pali", "division": "Pali Division"},
+        "307": {"district": "Sirohi", "division": "Pali Division"},
+        "311": {"district": "Bhilwara / Shahpura", "division": "Udaipur Division"},
+        "312": {"district": "Chittorgarh / Pratapgarh", "division": "Udaipur Division"},
+        "313": {"district": "Udaipur / Rajsamand / Salumbar", "division": "Udaipur Division"},
+        "314": {"district": "Dungarpur", "division": "Banswara Division"},
+        "321": {"district": "Bharatpur / Deeg", "division": "Bharatpur Division"},
+        "322": {"district": "Sawai Madhopur / Gangapur City / Karauli", "division": "Bharatpur Division"},
+        "323": {"district": "Bundi", "division": "Kota Division"},
+        "324": {"district": "Kota", "division": "Kota Division"},
+        "325": {"district": "Baran / Kota Rural", "division": "Kota Division"},
+        "326": {"district": "Jhalawar", "division": "Kota Division"},
+        "327": {"district": "Banswara", "division": "Banswara Division"},
+        "328": {"district": "Dholpur", "division": "Bharatpur Division"},
+        "331": {"district": "Churu", "division": "Sikar Division"},
+        "332": {"district": "Sikar / Neem Ka Thana", "division": "Sikar Division"},
+        "333": {"district": "Jhunjhunu", "division": "Sikar Division"},
+        "334": {"district": "Bikaner", "division": "Bikaner Division"},
+        "335": {"district": "Sri Ganganagar / Anupgarh / Hanumangarh", "division": "Bikaner Division"},
+        "341": {"district": "Nagaur / Didwana-Kuchaman", "division": "Ajmer Division"},
+        "342": {"district": "Jodhpur / Jodhpur Rural / Phalodi", "division": "Jodhpur Division"},
+        "343": {"district": "Jalore / Sanchore", "division": "Pali Division"},
+        "344": {"district": "Barmer / Balotra", "division": "Jodhpur Division"},
+        "345": {"district": "Jaisalmer", "division": "Jodhpur Division"}
+    }
+
+    # 1. Pincode Search
     if digits:
         pin = digits[0]
+        # A. Check FALLBACK_PINCODES
+        for p in FALLBACK_PINCODES:
+            if p["pincode"] == pin:
+                dist = next((d for d in FALLBACK_DISTRICTS if d["rajmaster_id"] == p.get("district_id")), None)
+                div = next((dv for dv in FALLBACK_DIVISIONS if dv["rajmaster_id"] == p.get("division_id")), None)
+                tb = next((t for t in FALLBACK_TEHSILS_BLOCKS if t["rajmaster_id"] == p.get("tehsil_block_id")), None)
+                ulb = next((u for u in FALLBACK_ULBS if u["rajmaster_id"] == p.get("ulb_id")), None)
+                gp = next((g for g in FALLBACK_GRAM_PANCHAYATS if g["rajmaster_id"] == p.get("gram_panchayat_id")), None)
+                result["matched"] = True
+                result["entity_type"] = "Pincode"
+                result["entity_name"] = f"Pincode {pin} ({p['city_or_village']})"
+                result["lineage"] = {
+                    "state": "Rajasthan",
+                    "division": div["name_en"] if div else None,
+                    "district": dist["name_en"] if dist else None,
+                    "tehsil_or_block": tb["name_en"] if tb else None,
+                    "ulb": ulb["name_en"] if ulb else None,
+                    "gram_panchayat": gp["name_en"] if gp else None,
+                    "area_or_village": p["city_or_village"],
+                    "pincode": pin
+                }
+                result["breadcrumbs"] = [x for x in ["Rajasthan", div["name_en"] if div else None, dist["name_en"] if dist else None, tb["name_en"] if tb else None, p["city_or_village"]] if x]
+                result["details"] = {
+                    "pincode": pin,
+                    "city_or_village": p["city_or_village"],
+                    "district": dist["name_en"] if dist else None,
+                    "division": div["name_en"] if div else None,
+                    "tehsil": tb["name_en"] if tb else None,
+                    "ulb": ulb["name_en"] if ulb else None,
+                    "gram_panchayat": gp["name_en"] if gp else None,
+                    "zila_pramukh": dist.get("zila_pramukh") if dist else None,
+                    "collectorate": f"District Collectorate, {dist['name_en']}" if dist else None
+                }
+                return result
+
+        # B. Check FALLBACK_VILLAGES
         for v in FALLBACK_VILLAGES:
             if v.get("pincode") == pin:
                 dist = next((d for d in FALLBACK_DISTRICTS if d["rajmaster_id"] == v.get("district_id")), None)
@@ -456,6 +524,31 @@ def _lookup_in_memory_master(query: str) -> Dict[str, Any]:
                 }
                 return result
 
+        # C. Fallback Prefix Range Mapping (any 30xxxx - 34xxxx code)
+        pref = pin[:3]
+        if pref in RAJASTHAN_PIN_PREFIX_MAP:
+            info = RAJASTHAN_PIN_PREFIX_MAP[pref]
+            result["matched"] = True
+            result["entity_type"] = "Pincode"
+            result["entity_name"] = f"Pincode {pin}"
+            result["lineage"] = {
+                "state": "Rajasthan",
+                "division": info["division"],
+                "district": info["district"],
+                "area_or_village": f"Pincode {pin} Postal Delivery Zone",
+                "pincode": pin
+            }
+            result["breadcrumbs"] = ["Rajasthan", info["division"], info["district"], f"Pincode {pin}"]
+            result["details"] = {
+                "pincode": pin,
+                "city_or_village": f"Postal Delivery Zone {pin}",
+                "district": info["district"],
+                "division": info["division"],
+                "state": "Rajasthan",
+                "postal_circle": "Rajasthan Postal Circle (Zone 3)"
+            }
+            return result
+
     q_lower = clean_query.lower()
     raw_words = [w for w in re.split(r"[ ,?.!]+", clean_query) if len(w) >= 2]
     candidates = [w for w in raw_words if w.lower() not in STOP_WORDS and len(w) >= 3]
@@ -475,6 +568,147 @@ def _lookup_in_memory_master(query: str) -> Dict[str, Any]:
         any(alias in q_lower for alias in NAME_ALIASES.get(c.lower(), [c.lower()]))
         for c in candidates if any(d["name_en"].lower() == c.lower() for d in FALLBACK_DISTRICTS)
     )
+
+    def match_village():
+        for term in terms:
+            for v in FALLBACK_VILLAGES:
+                v_en = v["name_en"].lower()
+                v_hi = v["name_hi"]
+                if term == v_en or term == v_hi or term in v_en or (len(term) >= 4 and v_en in term):
+                    dist = next((d for d in FALLBACK_DISTRICTS if d["rajmaster_id"] == v.get("district_id")), None)
+                    div = next((dv for dv in FALLBACK_DIVISIONS if dist and dv["rajmaster_id"] == dist.get("division_id")), None)
+                    tb = next((t for t in FALLBACK_TEHSILS_BLOCKS if t["rajmaster_id"] == v.get("tehsil_block_id")), None)
+                    gp = next((g for g in FALLBACK_GRAM_PANCHAYATS if g["rajmaster_id"] == v.get("gram_panchayat_id")), None)
+                    result["matched"] = True
+                    result["entity_type"] = "Village"
+                    result["entity_name"] = v["name_en"]
+                    result["lineage"] = {
+                        "state": "Rajasthan",
+                        "division": div["name_en"] if div else None,
+                        "district": dist["name_en"] if dist else None,
+                        "tehsil": tb["name_en"] if tb else None,
+                        "gram_panchayat": gp["name_en"] if gp else None,
+                        "patwar_circle": v.get("patwar_circle"),
+                        "patwari": v.get("patwari"),
+                        "village": v["name_en"],
+                        "lgd_code": v.get("lgd_code"),
+                        "pincode": v.get("pincode")
+                    }
+                    result["breadcrumbs"] = [x for x in ["Rajasthan", div["name_en"] if div else None, dist["name_en"] if dist else None, tb["name_en"] if tb else None, gp["name_en"] if gp else None, v["name_en"]] if x]
+                    result["details"] = {
+                        "village_english": v["name_en"],
+                        "village_hindi": v["name_hi"],
+                        "patwar_circle": v.get("patwar_circle"),
+                        "patwari": v.get("patwari"),
+                        "sarpanch": gp.get("sarpanch") if gp else None,
+                        "pincode": v.get("pincode"),
+                        "lgd_code": v.get("lgd_code")
+                    }
+                    return result
+        return None
+
+    def match_gram_panchayat():
+        for term in terms:
+            for gp in FALLBACK_GRAM_PANCHAYATS:
+                gp_en = gp["name_en"].lower()
+                gp_hi = gp["name_hi"]
+                if term == gp_en or term == gp_hi or term in gp_en or (len(term) >= 4 and gp_en in term):
+                    dist = next((d for d in FALLBACK_DISTRICTS if d["rajmaster_id"] == gp.get("district_id")), None)
+                    div = next((dv for dv in FALLBACK_DIVISIONS if dist and dv["rajmaster_id"] == dist.get("division_id")), None)
+                    tb = next((t for t in FALLBACK_TEHSILS_BLOCKS if t["rajmaster_id"] == gp.get("tehsil_block_id")), None)
+                    result["matched"] = True
+                    result["entity_type"] = "Gram Panchayat"
+                    result["entity_name"] = gp["name_en"]
+                    result["lineage"] = {
+                        "state": "Rajasthan",
+                        "division": div["name_en"] if div else None,
+                        "district": dist["name_en"] if dist else None,
+                        "tehsil_or_block": tb["name_en"] if tb else None,
+                        "gram_panchayat": gp["name_en"],
+                        "sarpanch": gp.get("sarpanch"),
+                        "lgd_code": gp.get("lgd_code")
+                    }
+                    result["breadcrumbs"] = [x for x in ["Rajasthan", div["name_en"] if div else None, dist["name_en"] if dist else None, tb["name_en"] if tb else None, gp["name_en"]] if x]
+                    result["details"] = {
+                        "gram_panchayat_english": gp["name_en"],
+                        "gram_panchayat_hindi": gp["name_hi"],
+                        "sarpanch": gp.get("sarpanch"),
+                        "tehsil_or_block": tb["name_en"] if tb else None,
+                        "district": dist["name_en"] if dist else None,
+                        "division": div["name_en"] if div else None,
+                        "lgd_code": gp.get("lgd_code")
+                    }
+                    return result
+        return None
+
+    def match_tehsil_block():
+        for term in terms:
+            for tb in FALLBACK_TEHSILS_BLOCKS:
+                tb_en = tb["name_en"].lower()
+                tb_hi = tb["name_hi"]
+                if term == tb_en or term == tb_hi or term in tb_en or (len(term) >= 4 and tb_en in term):
+                    dist = next((d for d in FALLBACK_DISTRICTS if d["rajmaster_id"] == tb.get("district_id")), None)
+                    div = next((dv for dv in FALLBACK_DIVISIONS if dist and dv["rajmaster_id"] == dist.get("division_id")), None)
+                    result["matched"] = True
+                    result["entity_type"] = tb.get("entity_type") or "Tehsil"
+                    result["entity_name"] = tb["name_en"]
+                    result["lineage"] = {
+                        "state": "Rajasthan",
+                        "division": div["name_en"] if div else None,
+                        "district": dist["name_en"] if dist else None,
+                        "tehsil_or_block": tb["name_en"],
+                        "tehsildar": tb.get("tehsildar_details"),
+                        "bdo": tb.get("bdo_details"),
+                        "lgd_code": tb.get("lgd_code")
+                    }
+                    result["breadcrumbs"] = [x for x in ["Rajasthan", div["name_en"] if div else None, dist["name_en"] if dist else None, tb["name_en"]] if x]
+                    result["details"] = {
+                        "tehsil_block_english": tb["name_en"],
+                        "tehsil_block_hindi": tb["name_hi"],
+                        "entity_type": tb.get("entity_type"),
+                        "district": dist["name_en"] if dist else None,
+                        "division": div["name_en"] if div else None,
+                        "tehsildar": tb.get("tehsildar_details"),
+                        "bdo": tb.get("bdo_details"),
+                        "lgd_code": tb.get("lgd_code")
+                    }
+                    return result
+        return None
+
+    def match_ulb():
+        for term in terms:
+            for u in FALLBACK_ULBS:
+                u_en = u["name_en"].lower()
+                u_hi = u["name_hi"]
+                u_city = (u.get("city_name") or "").lower()
+                if term == u_en or term in u_en or term == u_hi or (u_city and term == u_city):
+                    dist = next((d for d in FALLBACK_DISTRICTS if d["rajmaster_id"] == u.get("district_id")), None)
+                    div = next((dv for dv in FALLBACK_DIVISIONS if dist and dv["rajmaster_id"] == dist.get("division_id")), None)
+                    result["matched"] = True
+                    result["entity_type"] = "UrbanLocalBody"
+                    result["entity_name"] = u["name_en"]
+                    result["lineage"] = {
+                        "state": "Rajasthan",
+                        "division": div["name_en"] if div else None,
+                        "district": dist["name_en"] if dist else None,
+                        "ulb_name": u["name_en"],
+                        "ulb_type": u.get("ulb_type"),
+                        "city": u.get("city_name"),
+                        "pincode": u.get("pincode"),
+                        "lgd_code": u.get("lgd_code")
+                    }
+                    result["breadcrumbs"] = [x for x in ["Rajasthan", div["name_en"] if div else None, dist["name_en"] if dist else None, u["name_en"]] if x]
+                    result["details"] = {
+                        "ulb_english": u["name_en"],
+                        "ulb_hindi": u["name_hi"],
+                        "ulb_type": u.get("ulb_type"),
+                        "city": u.get("city_name"),
+                        "district": dist["name_en"] if dist else None,
+                        "pincode": u.get("pincode"),
+                        "lgd_code": u.get("lgd_code")
+                    }
+                    return result
+        return None
 
     def match_district():
         for term in terms:
@@ -536,12 +770,37 @@ def _lookup_in_memory_master(query: str) -> Dict[str, Any]:
                     return result
         return None
 
+    # Check match priority
+    if any(k in q_lower for k in ["village", "gaon", "गाँव", "ग्राम"]):
+        m = match_village()
+        if m: return m
+
+    if any(k in q_lower for k in ["panchayat", "sarpanch", "सरपंच", "पंचायत"]):
+        m = match_gram_panchayat()
+        if m: return m
+
+    if any(k in q_lower for k in ["tehsil", "block", "तहसील", "ब्लॉक", "samiti", "समिति"]):
+        m = match_tehsil_block()
+        if m: return m
+
+    if any(k in q_lower for k in ["corporation", "municipality", "nigam", "parishad", "निगम", "परिषद", "पालिका"]):
+        m = match_ulb()
+        if m: return m
+
     if check_divisions_first:
         m = match_division()
         if m: return m
         m = match_district()
         if m: return m
     else:
+        m = match_village()
+        if m: return m
+        m = match_gram_panchayat()
+        if m: return m
+        m = match_tehsil_block()
+        if m: return m
+        m = match_ulb()
+        if m: return m
         m = match_district()
         if m: return m
         m = match_division()
