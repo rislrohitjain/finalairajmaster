@@ -49,3 +49,4 @@ playwright_screenshots/
 !frontend/public/*.png
 !frontend/public/*.ico
 !frontend/public/*.svg
+.vercel
