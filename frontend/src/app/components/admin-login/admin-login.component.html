@@ -54,7 +54,7 @@
         </div>
       </div>
 
-      <button type="submit" [disabled]="isLoading" (click)="onLogin($event)"
+      <button type="submit" [disabled]="isLoading"
               class="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center space-x-2">
         <span *ngIf="!isLoading">Sign In to Admin Portal</span>
         <span *ngIf="isLoading" class="flex items-center space-x-2">

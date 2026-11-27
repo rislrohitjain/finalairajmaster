@@ -44,7 +44,12 @@ export class AdminLoginComponent implements OnInit {
       event.preventDefault();
       event.stopPropagation();
     }
-    if (!this.username || !this.password) {
+    if (this.isLoading) return;
+
+    const u = (this.username || '').trim();
+    const p = (this.password || '').trim();
+
+    if (!u || !p) {
       this.errorMessage = 'Please enter both username and password';
       return;
     }
@@ -53,7 +58,7 @@ export class AdminLoginComponent implements OnInit {
     this.errorMessage = '';
     this.sessionNotice = '';
 
-    this.auth.login(this.username, this.password).subscribe({
+    this.auth.login(u, p).subscribe({
       next: () => {
         this.isLoading = false;
         this.router.navigate(['/admin/dashboard']);

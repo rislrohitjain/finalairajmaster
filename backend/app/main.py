@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.db.init_db import init_models, seed_initial_data
 from app.api.chat import router as chat_router, chat_endpoint, ingest_document
-from app.api.admin import router as admin_router
+from app.api.admin import router as admin_router, admin_login, AdminLoginRequest
 from app.db.session import async_engine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -52,15 +52,16 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(admin_router)
 
-# Mount direct root endpoints for /ingest and /chat
+# Mount direct root endpoints for /ingest, /chat, and /admin/login
 app.post("/chat")(chat_endpoint)
 app.post("/ingest")(ingest_document)
+app.post("/admin/login")(admin_login)
 
 @app.middleware("http")
 async def spa_and_assets_middleware(request: Request, call_next):
     path = request.url.path.lstrip("/")
     # Never intercept backend routes
-    if path.startswith("api/") or path in ("docs", "openapi.json", "health", "redoc", "chat", "ingest"):
+    if path.startswith("api/") or path in ("docs", "openapi.json", "health", "redoc", "chat", "ingest", "admin/login"):
         return await call_next(request)
 
     # Check if this is an asset file in the built frontend
