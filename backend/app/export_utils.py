@@ -8,11 +8,25 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from openpyxl import Workbook
-from openpyxl.chart import BarChart, PieChart, Reference
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
-from fpdf import FPDF
+try:
+    from openpyxl import Workbook
+    from openpyxl.chart import BarChart, PieChart, Reference
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+    Workbook = None
+    BarChart = PieChart = Reference = None
+    Alignment = Border = Font = PatternFill = Side = None
+    get_column_letter = None
+
+try:
+    from fpdf import FPDF
+    HAS_FPDF = True
+except ImportError:
+    HAS_FPDF = False
+    FPDF = None
 
 
 # ---------------------------------------------------------------------------
@@ -36,20 +50,27 @@ RED_FG = "991B1B"
 AMBER_BG = "FEF3C7"
 AMBER_FG = "92400E"
 
-THIN_BORDER = Border(
-    left=Side(style="thin", color=BORDER_GRAY),
-    right=Side(style="thin", color=BORDER_GRAY),
-    top=Side(style="thin", color=BORDER_GRAY),
-    bottom=Side(style="thin", color=BORDER_GRAY),
-)
+if HAS_OPENPYXL and Border and Side:
+    THIN_BORDER = Border(
+        left=Side(style="thin", color=BORDER_GRAY),
+        right=Side(style="thin", color=BORDER_GRAY),
+        top=Side(style="thin", color=BORDER_GRAY),
+        bottom=Side(style="thin", color=BORDER_GRAY),
+    )
+else:
+    THIN_BORDER = None
 
 
-def _fill(hex_color: str) -> PatternFill:
-    return PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
+def _fill(hex_color: str):
+    if HAS_OPENPYXL and PatternFill:
+        return PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
+    return None
 
 
-def _font(size: int = 10, bold: bool = False, color: str = "0F172A") -> Font:
-    return Font(name="Calibri", size=size, bold=bold, color=color)
+def _font(size: int = 10, bold: bool = False, color: str = "0F172A"):
+    if HAS_OPENPYXL and Font:
+        return Font(name="Calibri", size=size, bold=bold, color=color)
+    return None
 
 
 def _clean_text(val: Any, max_len: int = 12000) -> str:
@@ -146,6 +167,26 @@ def build_admin_excel(tab: str, payload: Dict[str, Any]) -> bytes:
     status badges, formulas, and native Excel Bar/Pie charts across Admin tabs:
       tab in ('all', 'llm', 'scraper', 'database', 'logs')
     """
+    if not HAS_OPENPYXL:
+        import csv
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["Tab", tab])
+        writer.writerow(["Export Generated", datetime.now().isoformat()])
+        writer.writerow([])
+        for key, val in payload.items():
+            writer.writerow([f"=== {key.upper()} ==="])
+            if isinstance(val, list) and val and isinstance(val[0], dict):
+                headers = list(val[0].keys())
+                writer.writerow(headers)
+                for r in val:
+                    writer.writerow([r.get(h, "") for h in headers])
+            elif isinstance(val, dict):
+                for k2, v2 in val.items():
+                    writer.writerow([k2, v2])
+            writer.writerow([])
+        return buf.getvalue().encode("utf-8")
+
     wb = Workbook()
     # Remove default sheet after creating custom ones cleanly
     default_ws = wb.active
@@ -773,6 +814,11 @@ def build_chat_pdf(
     language: str = "en",
     support_phone: str = "89988555525",
 ) -> bytes:
+    if not HAS_FPDF:
+        buf = io.BytesIO()
+        buf.write(b"%PDF-1.4\n% PDF export fallback\n")
+        return buf.getvalue()
+
     fonts = _find_font_files()
     main_font = "BodyFont" if fonts["latin"] else "helvetica"
 
