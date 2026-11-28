@@ -159,23 +159,68 @@
       </div>
     </div>
 
-    <!-- Sidebar Footer / Admin Button & Developer Credit -->
+    <!-- Sidebar Footer / User & Admin Login-Logout + Developer Credit -->
     <div class="p-3 border-t border-slate-200 bg-slate-50 space-y-2">
-      <div class="flex items-center justify-between">
-        <button (click)="clearChat()" class="text-xs text-slate-500 hover:text-slate-800 font-medium flex items-center space-x-1.5 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors">
+      <!-- User Session Row on Root Path -->
+      <div class="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-200/80">
+        <div *ngIf="!userService.isLoggedIn()" class="flex items-center gap-1.5 w-full">
+          <button type="button" (click)="openUserAuthModal('login')"
+                  class="flex-1 text-xs font-bold text-slate-700 hover:text-orange-700 bg-white hover:bg-orange-50 border border-slate-300 px-2.5 py-1.5 rounded-lg flex items-center justify-center space-x-1 transition-colors cursor-pointer">
+            <span>👤 User Login</span>
+          </button>
+          <button type="button" (click)="openUserAuthModal('register')"
+                  class="flex-1 text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 px-2.5 py-1.5 rounded-lg flex items-center justify-center transition-colors cursor-pointer">
+            <span>Register</span>
+          </button>
+        </div>
+
+        <div *ngIf="userService.isLoggedIn()" class="flex items-center justify-between gap-1.5 w-full">
+          <button type="button" (click)="openUserAuthModal('profile')"
+                  class="flex-1 min-w-0 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            <span class="truncate">{{ userService.currentUser()?.name || userService.currentUser()?.username }}</span>
+          </button>
+          <button type="button" (click)="onUserLogout()"
+                  class="shrink-0 text-xs font-bold text-red-700 hover:text-white bg-red-50 hover:bg-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer">
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between gap-1.5">
+        <button type="button" (click)="clearChat()" class="text-xs text-slate-500 hover:text-slate-800 font-medium flex items-center space-x-1 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-          <span>Reset Chat</span>
+          <span>Reset</span>
         </button>
+
+        <div class="flex items-center space-x-1">
+          <button type="button" (click)="exportChat('excel')" [disabled]="isExportingChat !== null"
+                  title="Export chat transcript to colorful Excel (.xlsx)"
+                  class="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg transition-colors cursor-pointer disabled:opacity-50">
+            {{ isExportingChat === 'excel' ? '...' : '📊 Excel' }}
+          </button>
+          <button type="button" (click)="exportChat('pdf')" [disabled]="isExportingChat !== null"
+                  title="Export chat transcript to PDF (.pdf)"
+                  class="text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-1 rounded-lg transition-colors cursor-pointer disabled:opacity-50">
+            {{ isExportingChat === 'pdf' ? '...' : '📄 PDF' }}
+          </button>
+        </div>
 
         <a *ngIf="!auth.isLoggedIn()" routerLink="/admin/login" class="text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-lg flex items-center space-x-1 hover:bg-orange-100 transition-colors">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
           <span>Admin Login</span>
         </a>
 
-        <a *ngIf="auth.isLoggedIn()" routerLink="/admin/dashboard" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center space-x-1 hover:bg-emerald-100 transition-colors">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          <span>Dashboard</span>
-        </a>
+        <div *ngIf="auth.isLoggedIn()" class="flex items-center space-x-1">
+          <a routerLink="/admin/dashboard" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg flex items-center space-x-1 hover:bg-emerald-100 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span>Dashboard</span>
+          </a>
+          <button type="button" (click)="onAdminLogout()"
+                  class="text-xs font-bold text-red-700 hover:text-white bg-red-50 hover:bg-red-600 border border-red-200 px-2 py-1.5 rounded-lg transition-colors cursor-pointer">
+            Logout
+          </button>
+        </div>
       </div>
 
       <!-- Developer Info in Sidebar (Req 1) -->
@@ -310,6 +355,22 @@
           <span class="sm:hidden">About</span>
         </button>
 
+        <!-- Export Chat Transcript Buttons (Excel & PDF) -->
+        <div class="flex items-center space-x-1">
+          <button type="button" (click)="exportChat('excel')" [disabled]="isExportingChat !== null"
+                  title="Export Chat Conversation as Styled Excel (.xlsx)"
+                  class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs transition-all shadow-2xs cursor-pointer disabled:opacity-50">
+            <span>📊</span>
+            <span class="hidden md:inline">{{ isExportingChat === 'excel' ? 'Exporting...' : 'Excel' }}</span>
+          </button>
+          <button type="button" (click)="exportChat('pdf')" [disabled]="isExportingChat !== null"
+                  title="Export Chat Conversation as PDF (.pdf)"
+                  class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold text-xs transition-all shadow-2xs cursor-pointer disabled:opacity-50">
+            <span>📄</span>
+            <span class="hidden md:inline">{{ isExportingChat === 'pdf' ? 'Exporting...' : 'PDF' }}</span>
+          </button>
+        </div>
+
         <!-- 100+ Example Questions Modal Trigger Button -->
         <button type="button" (click)="openQuestionsModal()" 
                 class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-xs shadow-sm hover:shadow transition-all group cursor-pointer">
@@ -322,11 +383,13 @@
         <!-- User Authentication & Profile Buttons (Req 8) -->
         <div *ngIf="!userService.isLoggedIn()" class="flex items-center space-x-1">
           <button type="button" (click)="openUserAuthModal('login')"
-                  class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all shadow-2xs cursor-pointer flex items-center space-x-1">
+                  data-testid="header-login-btn"
+                  class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs transition-all shadow-2xs cursor-pointer flex items-center space-x-1">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-            <span>Sign In</span>
+            <span>Login</span>
           </button>
           <button type="button" (click)="openUserAuthModal('register')"
+                  data-testid="header-register-btn"
                   class="hidden sm:inline-flex px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs transition-all shadow-2xs cursor-pointer">
             <span>Register</span>
           </button>
@@ -334,9 +397,16 @@
 
         <div *ngIf="userService.isLoggedIn()" class="flex items-center space-x-1">
           <button type="button" (click)="openUserAuthModal('profile')"
+                  data-testid="header-profile-btn"
                   class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs transition-all shadow-2xs cursor-pointer flex items-center space-x-1.5">
             <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
             <span class="max-w-[85px] sm:max-w-[120px] truncate">{{ userService.currentUser()?.name || 'User Profile' }}</span>
+          </button>
+          <button type="button" (click)="onUserLogout()"
+                  data-testid="header-logout-btn"
+                  title="Logout from User Session"
+                  class="px-2.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-600 border border-red-200 text-red-700 hover:text-white font-bold text-xs transition-all shadow-2xs cursor-pointer flex items-center space-x-1">
+            <span>Logout</span>
           </button>
         </div>
 
@@ -345,10 +415,17 @@
           <span class="hidden sm:inline">Admin</span>
         </a>
 
-        <a *ngIf="auth.isLoggedIn()" routerLink="/admin/dashboard" class="px-2.5 py-1.5 rounded-xl bg-orange-600 text-white hover:bg-orange-700 text-xs font-semibold shadow transition-all flex items-center space-x-1">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
-          <span class="hidden sm:inline">Admin</span>
-        </a>
+        <div *ngIf="auth.isLoggedIn()" class="flex items-center space-x-1">
+          <a routerLink="/admin/dashboard" class="px-2.5 py-1.5 rounded-xl bg-orange-600 text-white hover:bg-orange-700 text-xs font-semibold shadow transition-all flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+            <span class="hidden sm:inline">Admin</span>
+          </a>
+          <button type="button" (click)="onAdminLogout()"
+                  title="Logout from Admin Session"
+                  class="px-2 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-600 border border-rose-200 text-rose-700 hover:text-white text-xs font-bold transition-all cursor-pointer">
+            Admin Logout
+          </button>
+        </div>
       </div>
     </header>
 
@@ -440,9 +517,53 @@
             </div>
           </div>
 
+          <!-- Gemini-Style Live Thinking & Pipeline Steps Drawer -->
+          <div *ngIf="msg.pipelineSteps && msg.pipelineSteps.length > 0"
+               class="rounded-xl border border-slate-200/90 bg-slate-50/90 overflow-hidden">
+            <button type="button" (click)="toggleSteps(msg)"
+                    class="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-slate-100/80 transition-colors cursor-pointer">
+              <div class="flex items-center space-x-2">
+                <span *ngIf="msg.isStreaming" class="w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
+                <span *ngIf="!msg.isStreaming" class="text-xs">✨</span>
+                <span class="text-[11px] font-bold text-slate-700">
+                  {{ msg.isStreaming ? 'Thinking & Executing Pipeline...' : 'Pipeline Steps' }}
+                </span>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500">
+                  {{ msg.pipelineSteps.length }} steps<span *ngIf="msg.latencyMs"> • {{ msg.latencyMs }}ms</span>
+                </span>
+              </div>
+              <span class="text-xs text-slate-500 font-bold">{{ msg.stepsExpanded ? '▾' : '▸' }}</span>
+            </button>
+
+            <div *ngIf="msg.stepsExpanded" class="px-3 pb-2.5 pt-1 border-t border-slate-200/70 space-y-1.5">
+              <div *ngFor="let st of msg.pipelineSteps" class="flex items-start justify-between gap-2 text-[11px]">
+                <div class="flex items-start space-x-2 min-w-0">
+                  <span class="shrink-0 mt-0.5">{{ st.icon || '⚡' }}</span>
+                  <div class="min-w-0">
+                    <span class="font-bold text-slate-800">{{ st.title }}</span>
+                    <span *ngIf="st.detail" class="text-slate-500 ml-1.5 break-words">— {{ st.detail }}</span>
+                  </div>
+                </div>
+                <div class="shrink-0 flex items-center space-x-1.5">
+                  <span *ngIf="st.duration_ms !== undefined && st.duration_ms !== null" class="text-[10px] font-mono text-slate-400">
+                    {{ st.duration_ms }}ms
+                  </span>
+                  <span *ngIf="st.status === 'running'" class="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin inline-block"></span>
+                  <span *ngIf="st.status === 'done'" class="text-emerald-600 font-bold">✓</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Rich Formatted HTML Output -->
-          <div class="text-sm text-slate-800 leading-relaxed markdown-preview"
+          <div *ngIf="msg.text" class="text-sm text-slate-800 leading-relaxed markdown-preview"
                [innerHTML]="renderMarkdown(msg.text)">
+          </div>
+
+          <!-- Natural Real-User Typing Cursor while Streaming -->
+          <div *ngIf="msg.isStreaming && msg.text" class="flex items-center space-x-1.5 text-[11px] text-orange-600 font-semibold">
+            <span class="inline-block w-1.5 h-3.5 bg-orange-500 animate-pulse rounded-xs"></span>
+            <span>Typing live...</span>
           </div>
 
           <!-- Welcome Jain Live Voice Action Box -->
@@ -1547,7 +1668,7 @@
             <p class="text-[11px] text-slate-300">Save your queries & personalize your AI interactions</p>
           </div>
         </div>
-        <button (click)="closeUserAuthModal()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center">
+        <button type="button" (click)="closeUserAuthModal()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer">
           ✕
         </button>
       </div>
@@ -1555,30 +1676,30 @@
       <!-- Tabs: Sign In / Register / Profile -->
       <div class="flex border-b border-slate-200 bg-slate-50 px-6 pt-3 space-x-4">
         <button *ngIf="!userService.isLoggedIn()"
-                type="button" (click)="userAuthTab = 'login'"
+                type="button" (click)="setUserAuthTab('login')"
                 [class.border-orange-600]="userAuthTab === 'login'"
                 [class.text-orange-600]="userAuthTab === 'login'"
                 [class.border-transparent]="userAuthTab !== 'login'"
                 [class.text-slate-500]="userAuthTab !== 'login'"
-                class="pb-2.5 text-xs font-bold border-b-2 transition-all">
+                class="pb-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer">
           Sign In
         </button>
         <button *ngIf="!userService.isLoggedIn()"
-                type="button" (click)="userAuthTab = 'register'"
+                type="button" (click)="setUserAuthTab('register')"
                 [class.border-orange-600]="userAuthTab === 'register'"
                 [class.text-orange-600]="userAuthTab === 'register'"
                 [class.border-transparent]="userAuthTab !== 'register'"
                 [class.text-slate-500]="userAuthTab !== 'register'"
-                class="pb-2.5 text-xs font-bold border-b-2 transition-all">
+                class="pb-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer">
           Create Account
         </button>
         <button *ngIf="userService.isLoggedIn()"
-                type="button" (click)="userAuthTab = 'profile'"
+                type="button" (click)="setUserAuthTab('profile')"
                 [class.border-orange-600]="userAuthTab === 'profile'"
                 [class.text-orange-600]="userAuthTab === 'profile'"
                 [class.border-transparent]="userAuthTab !== 'profile'"
                 [class.text-slate-500]="userAuthTab !== 'profile'"
-                class="pb-2.5 text-xs font-bold border-b-2 transition-all">
+                class="pb-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer">
           Profile Details
         </button>
       </div>
@@ -1594,7 +1715,7 @@
           <div class="space-y-1">
             <label class="text-[11px] font-bold text-slate-700 uppercase">Username / Mobile / Email</label>
             <input type="text" [(ngModel)]="userLoginForm.username" name="login_username" required
-                   placeholder="e.g. 9829012345 or rohit"
+                   placeholder="e.g. guest_user or your username"
                    class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
           </div>
           <div class="space-y-1">
@@ -1604,12 +1725,15 @@
                    class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
           </div>
           <button type="submit" [disabled]="isUserAuthLoading"
-                  class="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow transition-all disabled:opacity-50">
+                  class="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow transition-all disabled:opacity-50 cursor-pointer">
             {{ isUserAuthLoading ? 'Signing in...' : 'Sign In to Session' }}
           </button>
         </form>
         <p class="text-[11px] text-center text-slate-500">
-          New here? <button type="button" (click)="userAuthTab = 'register'" class="text-orange-600 font-bold underline">Create a profile</button>
+          New here? <button type="button" (click)="setUserAuthTab('register')" class="text-orange-600 font-bold underline cursor-pointer">Create a profile</button>
+        </p>
+        <p class="text-[10px] text-center text-slate-400">
+          Demo account: <span class="font-mono font-semibold">guest_user</span> / <span class="font-mono font-semibold">123456</span>
         </p>
       </div>
 
@@ -1646,10 +1770,13 @@
                    class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
           </div>
           <button type="submit" [disabled]="isUserAuthLoading"
-                  class="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow transition-all disabled:opacity-50">
+                  class="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow transition-all disabled:opacity-50 cursor-pointer">
             {{ isUserAuthLoading ? 'Creating Profile...' : 'Complete Registration' }}
           </button>
         </form>
+        <p class="text-[11px] text-center text-slate-500">
+          Already registered? <button type="button" (click)="setUserAuthTab('login')" class="text-orange-600 font-bold underline cursor-pointer">Sign In</button>
+        </p>
       </div>
 
       <!-- Tab Content: Profile View / Edit -->

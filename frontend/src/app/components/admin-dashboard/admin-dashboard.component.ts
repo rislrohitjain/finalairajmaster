@@ -87,6 +87,10 @@ export class AdminDashboardComponent implements OnInit {
   logSearchTerm: string = '';
   logIntentFilter: string = '';
 
+  // Excel Export State
+  isExporting: boolean = false;
+  exportNotice: string = '';
+
   constructor(
     public adminService: AdminService,
     public auth: AuthService,
@@ -520,5 +524,37 @@ export class AdminDashboardComponent implements OnInit {
   logout(): void {
     this.auth.logout();
     this.router.navigate(['/']);
+  }
+
+  exportExcelReport(tab: 'all' | 'llm' | 'scraper' | 'database' | 'logs'): void {
+    if (this.isExporting) return;
+    this.isExporting = true;
+    this.exportNotice = '';
+    const level = tab === 'database' ? this.selectedBoxLevel : 'district';
+    const search = tab === 'database' ? this.recordSearchTerm : (tab === 'logs' ? this.logSearchTerm : undefined);
+    const intent = tab === 'logs' ? this.logIntentFilter : undefined;
+
+    this.adminService.exportExcel(tab, level, search, intent).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        a.download = `rajmaster_admin_${tab}_${ts}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        this.isExporting = false;
+        this.exportNotice = `✓ Exported ${tab.toUpperCase()} Excel report with charts & summary!`;
+        setTimeout(() => (this.exportNotice = ''), 4000);
+      },
+      error: (err) => {
+        this.isExporting = false;
+        console.error('Excel export failed:', err);
+        this.handleAuthError(err);
+        alert('Excel export failed: ' + (err.error?.detail || err.message || 'Unknown error'));
+      }
+    });
   }
 }

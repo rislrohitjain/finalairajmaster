@@ -182,4 +182,14 @@ export class AdminService {
       headers: this.auth.getAuthHeaders()
     });
   }
+
+  exportExcel(tab: string = 'all', level: string = 'district', search?: string, intent?: string): Observable<Blob> {
+    let url = `${this.apiUrl}/export-excel?tab=${encodeURIComponent(tab)}&level=${encodeURIComponent(level)}`;
+    if (search && search.trim()) url += `&search=${encodeURIComponent(search.trim())}`;
+    if (intent && intent.trim()) url += `&intent=${encodeURIComponent(intent.trim())}`;
+    return this.http.get(url, {
+      headers: this.auth.getAuthHeaders(),
+      responseType: 'blob'
+    });
+  }
 }

@@ -1,7 +1,11 @@
+import io
 import os
+import re
 import time
 import json
 import asyncio
+import logging
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse
@@ -15,7 +19,9 @@ from app.config import settings
 from app.api.example_questions import EXAMPLE_QUESTIONS
 from app.llm_client import IS_HUGGINGFACE, get_embedding, generate_chat_reply
 from app.mcp.client import mcp_client
+from app.export_utils import build_chat_excel, build_chat_pdf
 
+logger = logging.getLogger("api.chat")
 router = APIRouter(prefix="/api", tags=["Chat & Geo"])
 
 class IngestRequest(BaseModel):
@@ -47,6 +53,7 @@ class ChatResponse(BaseModel):
     mcp_tool: Optional[str] = None
     mcp_transport: Optional[str] = None
     resolution_stage: Optional[str] = None
+    pipeline_steps: List[Dict[str, Any]] = []
 
 @router.get("/mcp/status")
 async def get_mcp_status():
@@ -356,7 +363,8 @@ async def chat_endpoint(req: ChatRequest):
         "mcp_used": False,
         "mcp_tool": None,
         "mcp_transport": None,
-        "resolution_stage": None
+        "resolution_stage": None,
+        "pipeline_steps": []
     }
 
     try:
@@ -434,12 +442,13 @@ async def chat_endpoint(req: ChatRequest):
         mcp_used=bool(agent_result.get("mcp_used", False)),
         mcp_tool=agent_result.get("mcp_tool"),
         mcp_transport=agent_result.get("mcp_transport"),
-        resolution_stage=agent_result.get("resolution_stage")
+        resolution_stage=agent_result.get("resolution_stage"),
+        pipeline_steps=agent_result.get("pipeline_steps") or []
     )
 
 @router.post("/chat/stream")
 async def chat_stream_endpoint(req: ChatRequest):
-    """SSE streaming response for real-time token rendering in chat UI"""
+    """Real-time SSE streaming response emitting live pipeline thinking steps and natural typing tokens."""
     start_time = time.perf_counter()
 
     initial_state = {
@@ -457,62 +466,204 @@ async def chat_stream_endpoint(req: ChatRequest):
         "mcp_used": False,
         "mcp_tool": None,
         "mcp_transport": None,
-        "resolution_stage": None
+        "resolution_stage": None,
+        "pipeline_steps": []
     }
 
-    agent_result = await rajmaster_agent.ainvoke(initial_state)
-    latency_ms = int((time.perf_counter() - start_time) * 1000)
-
-    # Log to database asynchronously
-    try:
-        async with AsyncSessionLocal() as session:
-            log_entry = ChatLog(
-                session_id=req.session_id,
-                user_query=req.query,
-                detected_intent=agent_result.get("intent") or "unknown",
-                sql_lookup_trace=agent_result.get("sql_trace") or {},
-                ai_response=agent_result.get("response_text") or "",
-                latency_ms=latency_ms
-            )
-            session.add(log_entry)
-            await session.commit()
-    except Exception:
-        pass
-
-    full_text = agent_result.get("response_text", "")
-
     async def event_generator():
-        # Stream word-by-word with realistic live support typing cadence
-        words = full_text.split(" ")
-        for i, word in enumerate(words):
-            chunk = word + (" " if i < len(words) - 1 else "")
-            payload = json.dumps({"token": chunk, "done": False})
-            yield f"data: {payload}\n\n"
-            await asyncio.sleep(0.015)
+        final_state: Dict[str, Any] = dict(initial_state)
+        emitted_step_ids = set()
 
-        sql_trace = agent_result.get("sql_trace") or {}
+        init_step = {
+            "id": "input",
+            "title": "Analyzing User Query & Language",
+            "detail": f"Received query ({req.language or 'auto'}): \"{req.query[:60]}\"",
+            "icon": "📱",
+            "status": "done",
+            "duration_ms": 1
+        }
+        emitted_step_ids.add("input")
+        yield f"data: {json.dumps({'type': 'step', 'step': init_step, 'done': False})}\n\n"
 
-        # Final message with metadata
+        running_guardrail = {
+            "id": "guardrail",
+            "title": "Guardrail & Intent Classifier",
+            "detail": "Checking intent, scope & Rajasthan entities...",
+            "icon": "🛡️",
+            "status": "running"
+        }
+        yield f"data: {json.dumps({'type': 'step', 'step': running_guardrail, 'done': False})}\n\n"
+
+        try:
+            async for chunk in rajmaster_agent.astream(initial_state, stream_mode="updates"):
+                for node_name, node_update in chunk.items():
+                    if not isinstance(node_update, dict):
+                        continue
+                    final_state.update(node_update)
+                    for step in (node_update.get("pipeline_steps") or []):
+                        sid = step.get("id")
+                        if sid and sid not in emitted_step_ids:
+                            emitted_step_ids.add(sid)
+                            yield f"data: {json.dumps({'type': 'step', 'step': step, 'done': False})}\n\n"
+
+                    if node_name == "guardrail_classifier":
+                        if node_update.get("intent") == "geographic_query":
+                            next_step = {
+                                "id": "db_mcp",
+                                "title": "6-Tier PostgreSQL & MCP Lookup",
+                                "detail": "Querying 6-tier tables & postgres-mcp JSON-RPC...",
+                                "icon": "⚡",
+                                "status": "running"
+                            }
+                            yield f"data: {json.dumps({'type': 'step', 'step': next_step, 'done': False})}\n\n"
+                    elif node_name == "database_lookup":
+                        next_step = {
+                            "id": "synthesizer",
+                            "title": "Synthesizing Verified Answer",
+                            "detail": "Grounding data or running RAG/Web fallback...",
+                            "icon": "🤖",
+                            "status": "running"
+                        }
+                        yield f"data: {json.dumps({'type': 'step', 'step': next_step, 'done': False})}\n\n"
+        except Exception as e:
+            logger.warning(f"Stream execution fallback ({e})")
+            final_state = await rajmaster_agent.ainvoke(initial_state)
+
+        latency_ms = int((time.perf_counter() - start_time) * 1000)
+
+        try:
+            async with AsyncSessionLocal() as session:
+                log_entry = ChatLog(
+                    session_id=req.session_id,
+                    user_query=req.query,
+                    detected_intent=final_state.get("intent") or "unknown",
+                    sql_lookup_trace=final_state.get("sql_trace") or {},
+                    ai_response=final_state.get("response_text") or "",
+                    latency_ms=latency_ms
+                )
+                session.add(log_entry)
+                await session.commit()
+        except Exception:
+            pass
+
+        typing_step = {
+            "id": "typing",
+            "title": "Typing Final Response",
+            "detail": "Streaming verified structured answer...",
+            "icon": "💬",
+            "status": "running"
+        }
+        yield f"data: {json.dumps({'type': 'step', 'step': typing_step, 'done': False})}\n\n"
+
+        full_text = final_state.get("response_text", "")
+        parts = re.findall(r"\S+\s*|\n+", full_text)
+        for part in parts:
+            if len(part) > 5 and "\n" not in part:
+                for idx in range(0, len(part), 4):
+                    sub = part[idx:idx + 4]
+                    yield f"data: {json.dumps({'type': 'token', 'token': sub, 'done': False})}\n\n"
+                    await asyncio.sleep(0.014)
+            else:
+                yield f"data: {json.dumps({'type': 'token', 'token': part, 'done': False})}\n\n"
+                await asyncio.sleep(0.018)
+
+        typing_done_step = {
+            "id": "typing",
+            "title": "Response Delivered",
+            "detail": f"Completed in {latency_ms} ms",
+            "icon": "💬",
+            "status": "done",
+            "duration_ms": latency_ms
+        }
+        yield f"data: {json.dumps({'type': 'step', 'step': typing_done_step, 'done': False})}\n\n"
+
+        all_steps = [init_step] + list(final_state.get("pipeline_steps") or []) + [typing_done_step]
+        sql_trace = final_state.get("sql_trace") or {}
+
         final_meta = json.dumps({
+            "type": "done",
             "token": "",
             "done": True,
             "session_id": req.session_id,
-            "intent": agent_result.get("intent", "geographic_query"),
-            "language": agent_result.get("language", req.language or "en"),
-            "next_questions": agent_result.get("next_questions") or [],
-            "breadcrumbs": agent_result.get("breadcrumbs") or [],
+            "intent": final_state.get("intent", "geographic_query"),
+            "language": final_state.get("language", req.language or "en"),
+            "next_questions": final_state.get("next_questions") or [],
+            "breadcrumbs": final_state.get("breadcrumbs") or [],
             "entity_name": sql_trace.get("entity_name"),
             "entity_type": sql_trace.get("entity_type"),
             "lineage": sql_trace.get("lineage"),
             "details": sql_trace.get("details"),
-            "helpline_card": agent_result.get("helpline_card", False),
-            "support_phone": agent_result.get("support_phone") or settings.SUPPORT_PHONE,
+            "helpline_card": final_state.get("helpline_card", False),
+            "support_phone": final_state.get("support_phone") or settings.SUPPORT_PHONE,
             "latency_ms": latency_ms,
-            "mcp_used": bool(agent_result.get("mcp_used", False)),
-            "mcp_tool": agent_result.get("mcp_tool"),
-            "mcp_transport": agent_result.get("mcp_transport"),
-            "resolution_stage": agent_result.get("resolution_stage")
+            "mcp_used": bool(final_state.get("mcp_used", False)),
+            "mcp_tool": final_state.get("mcp_tool"),
+            "mcp_transport": final_state.get("mcp_transport"),
+            "resolution_stage": final_state.get("resolution_stage"),
+            "pipeline_steps": all_steps
         })
         yield f"data: {final_meta}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+class ChatExportRequest(BaseModel):
+    session_id: str = Field(default="guest-session")
+    language: str = Field(default="en")
+    support_phone: Optional[str] = None
+    messages: List[Dict[str, Any]] = []
+
+
+async def _resolve_chat_export_messages(req: ChatExportRequest) -> List[Dict[str, Any]]:
+    if req.messages:
+        return req.messages
+    try:
+        async with AsyncSessionLocal() as session:
+            stmt = select(ChatLog).where(ChatLog.session_id == req.session_id).order_by(ChatLog.id.asc())
+            logs = (await session.execute(stmt)).scalars().all()
+            resolved: List[Dict[str, Any]] = []
+            for l in logs:
+                ts = l.created_at.strftime("%I:%M %p") if l.created_at else ""
+                resolved.append({"sender": "user", "text": l.user_query, "timestamp": ts})
+                resolved.append({"sender": "assistant", "text": l.ai_response, "timestamp": ts, "intent": l.detected_intent})
+            return resolved
+    except Exception:
+        return []
+
+
+@router.post("/chat/export/excel")
+async def export_chat_excel(req: ChatExportRequest):
+    """Exports the citizen chat session into a multi-sheet styled Excel (.xlsx) workbook with summary chart."""
+    msgs = await _resolve_chat_export_messages(req)
+    xlsx_bytes = build_chat_excel(
+        session_id=req.session_id,
+        messages=msgs,
+        language=req.language or "en",
+        support_phone=req.support_phone or settings.SUPPORT_PHONE,
+    )
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = f"rajmaster_chat_{req.session_id}_{ts}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.post("/chat/export/pdf")
+async def export_chat_pdf(req: ChatExportRequest):
+    """Exports the citizen chat session into a branded Unicode PDF (supports English + Devanagari Hindi)."""
+    msgs = await _resolve_chat_export_messages(req)
+    pdf_bytes = build_chat_pdf(
+        session_id=req.session_id,
+        messages=msgs,
+        language=req.language or "en",
+        support_phone=req.support_phone or settings.SUPPORT_PHONE,
+    )
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = f"rajmaster_chat_{req.session_id}_{ts}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )

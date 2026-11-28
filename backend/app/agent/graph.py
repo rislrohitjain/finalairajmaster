@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import time
 import asyncio
 import logging
 from typing import Dict, Any, TypedDict, Optional, List
@@ -33,6 +34,27 @@ class AgentState(TypedDict):
     mcp_tool: Optional[str]
     mcp_transport: Optional[str]
     resolution_stage: Optional[str]
+    pipeline_steps: Optional[List[Dict[str, Any]]]
+
+def _append_step(
+    state: AgentState,
+    step_id: str,
+    title: str,
+    detail: str,
+    icon: str,
+    duration_ms: Optional[int] = None,
+    status: str = "done"
+) -> None:
+    steps = list(state.get("pipeline_steps") or [])
+    steps.append({
+        "id": step_id,
+        "title": title,
+        "detail": detail,
+        "icon": icon,
+        "duration_ms": duration_ms,
+        "status": status
+    })
+    state["pipeline_steps"] = steps
 
 # Rajasthan Administrative keywords for classifier
 GEO_KEYWORDS = {
@@ -149,14 +171,28 @@ async def get_active_llm_config() -> Dict[str, Any]:
 
 # ----------------- NODE 1: Guardrail & Intent Classifier -----------------
 async def guardrail_classifier_node(state: AgentState) -> AgentState:
+    t0 = time.perf_counter()
     query = state["user_query"].strip()
     query_lower = query.lower()
     tokens = set(re.findall(r"\b\w+\b", query_lower))
+    detected_lang = detect_query_language(query, state.get("language"))
+
+    def _finish(intent: str, reason: str) -> AgentState:
+        state["intent"] = intent
+        ms = max(1, int((time.perf_counter() - t0) * 1000))
+        _append_step(
+            state,
+            "guardrail",
+            "Guardrail & Intent Classifier",
+            f"Intent: {intent} • Lang: {detected_lang} ({reason})",
+            "🛡️",
+            duration_ms=ms,
+        )
+        return state
 
     # Check if MCP metadata / database inspection query
     if _detect_mcp_metadata_intent(query):
-        state["intent"] = "geographic_query"
-        return state
+        return _finish("geographic_query", "MCP database inspection query")
 
     # Check if explicitly related to Rajasthan or official administration
     is_rajasthan_related = (
@@ -169,39 +205,32 @@ async def guardrail_classifier_node(state: AgentState) -> AgentState:
         if any(w in OUT_OF_SCOPE_WORDS for w in tokens) or any(
             re.search(r"\b" + re.escape(term) + r"\b", query_lower) for term in OUT_OF_SCOPE_WORDS
         ):
-            state["intent"] = "out_of_scope"
-            return state
+            return _finish("out_of_scope", "Out-of-scope topic detected -> helpline routing")
 
     # Check if pincode query (6 digits)
     if re.search(r"\b\d{6}\b", query):
-        state["intent"] = "geographic_query"
-        return state
+        return _finish("geographic_query", "6-digit pincode detected")
 
     # Check greeting / capability queries
     if len(tokens) <= 3 and any(w in CAPABILITY_KEYWORDS for w in tokens):
-        state["intent"] = "capability_query"
-        return state
+        return _finish("capability_query", "Greeting / capability overview")
 
     if any(k in query_lower for k in ["what can you", "help me", "who are you", "kya kar sakte"]):
-        state["intent"] = "capability_query"
-        return state
+        return _finish("capability_query", "Capability inquiry")
 
     # Check Rajasthan Geographic keywords or potential place names
     if is_rajasthan_related:
-        state["intent"] = "geographic_query"
-        return state
+        return _finish("geographic_query", "Rajasthan administrative keyword matched")
 
     # If query is short or looks like a place name (e.g. "Jaipur", "Muhana", "Beawar", "Didwana")
     # we test lookup before rejecting
     geo_lookup = await lookup_geographic_hierarchy(query)
     if geo_lookup.get("matched"):
-        state["intent"] = "geographic_query"
         state["sql_trace"] = geo_lookup
-        return state
+        return _finish("geographic_query", f"Entity matched ({geo_lookup.get('entity_name')})")
 
     # Allow query to proceed to RAG / Web Search Fallback rather than rejecting prematurely
-    state["intent"] = "geographic_query"
-    return state
+    return _finish("geographic_query", "Proceeding to DB, MCP, RAG & Web Search pipeline")
 
 # ----------------- LANGUAGE & NATURAL LANGUAGE GENERATION HELPERS -----------------
 HINDI_DIVISIONS = {
@@ -977,6 +1006,14 @@ async def out_of_scope_helpline_node(state: AgentState) -> AgentState:
     state["mcp_transport"] = None
     state["resolution_stage"] = "guardrail_helpline"
     state["response_text"] = sanitize_structured_output(state["response_text"])
+    _append_step(
+        state,
+        "helpline",
+        "Out-of-Scope Helpline Router",
+        f"Attached citizen helpline card ({phone}) in {lang}",
+        "📞",
+        duration_ms=2,
+    )
     return state
 
 # ----------------- NODE 3: Capability & Live Support Greeter Node -----------------
@@ -1030,6 +1067,14 @@ async def capability_node(state: AgentState) -> AgentState:
     state["mcp_transport"] = None
     state["resolution_stage"] = "capability"
     state["response_text"] = sanitize_structured_output(state["response_text"])
+    _append_step(
+        state,
+        "capability",
+        "Capability Greeter Node",
+        f"Prepared 6-tier portal overview & sample prompts ({lang})",
+        "🏛️",
+        duration_ms=2,
+    )
     return state
 
 # ----------------- RAG RETRIEVAL & LIVE WEB SEARCH FALLBACK ENGINES -----------------
@@ -1506,6 +1551,7 @@ def format_mcp_metadata_response(
 
 # ----------------- NODE 4: Geographic Database & MCP Lookup Node -----------------
 async def database_lookup_node(state: AgentState) -> AgentState:
+    t0 = time.perf_counter()
     query = state["user_query"]
 
     # 1. Check for direct MCP database metadata / stats / schema queries
@@ -1526,6 +1572,15 @@ async def database_lookup_node(state: AgentState) -> AgentState:
                 state["mcp_tool"] = mcp_meta_req["tool"]
                 state["mcp_transport"] = mcp_res.get("transport")
                 state["resolution_stage"] = "mcp_server"
+                ms = max(1, int((time.perf_counter() - t0) * 1000))
+                _append_step(
+                    state,
+                    "db_mcp",
+                    "PostgreSQL MCP Server Tool Call",
+                    f"Executed {mcp_meta_req['tool']} via {mcp_res.get('transport')}",
+                    "🔌",
+                    duration_ms=ms,
+                )
                 return state
         except Exception as e:
             logger.warning(f"MCP metadata lookup failed: {e}")
@@ -1579,10 +1634,32 @@ async def database_lookup_node(state: AgentState) -> AgentState:
     state["mcp_used"] = mcp_ok
     state["mcp_tool"] = "get_administrative_lineage" if mcp_ok else None
     state["mcp_transport"] = (mcp_res or {}).get("transport") if mcp_ok else None
+
+    ms = max(1, int((time.perf_counter() - t0) * 1000))
+    if lookup.get("matched"):
+        mcp_note = f" + MCP ({state['mcp_transport']})" if mcp_ok else ""
+        _append_step(
+            state,
+            "db_mcp",
+            "6-Tier PostgreSQL & MCP Lookup",
+            f"Matched {lookup.get('entity_type')}: {lookup.get('entity_name')}{mcp_note}",
+            "⚡",
+            duration_ms=ms,
+        )
+    else:
+        _append_step(
+            state,
+            "db_mcp",
+            "6-Tier PostgreSQL & MCP Lookup",
+            "No direct match in 6-tier tables — escalating to RAG & Web Search",
+            "⚡",
+            duration_ms=ms,
+        )
     return state
 
 # ----------------- NODE 5: Conversational Synthesizer Node -----------------
 async def synthesizer_node(state: AgentState) -> AgentState:
+    t0 = time.perf_counter()
     cfg = await get_active_llm_config()
     lookup = state.get("sql_trace") or {}
     matched = lookup.get("matched", False)
@@ -1604,6 +1681,8 @@ async def synthesizer_node(state: AgentState) -> AgentState:
         )
         state["response_text"] = mcp_out["text"]
         state["next_questions"] = mcp_out["next_questions"]
+        ms = max(1, int((time.perf_counter() - t0) * 1000))
+        _append_step(state, "synthesizer", "MCP Response Synthesizer", f"Formatted MCP output ({lang})", "🤖", duration_ms=ms)
         return state
 
     # 1. Exact Database / MCP Lineage Match
@@ -1630,21 +1709,50 @@ async def synthesizer_node(state: AgentState) -> AgentState:
             next_questions=next_questions
         )
         state["response_text"] = sanitize_structured_output(formatted_natural_text)
+        ms = max(1, int((time.perf_counter() - t0) * 1000))
+        _append_step(
+            state,
+            "synthesizer",
+            "Zero-Hallucination Synthesizer",
+            f"Compiled grounded {lang} narrative & {len(next_questions)} follow-up questions",
+            "🤖",
+            duration_ms=ms,
+        )
         return state
 
     # 2. Database RAG Retrieval Fallback
     enable_rag = cfg.get("enable_rag", True)
     rag_top_k = cfg.get("rag_top_k", 5)
     if enable_rag:
+        t_rag = time.perf_counter()
         try:
             rag_results = await perform_rag_retrieval(state["user_query"], top_k=rag_top_k)
+            rag_ms = max(1, int((time.perf_counter() - t_rag) * 1000))
             if rag_results:
+                _append_step(
+                    state,
+                    "rag",
+                    "RAG Database Retrieval",
+                    f"Matched {len(rag_results)} records in raj_masters & public tables",
+                    "📚",
+                    duration_ms=rag_ms,
+                )
                 state["breadcrumbs"] = ["Rajasthan", "Verified Records"]
                 state["resolution_stage"] = "rag_retrieval"
                 rag_out = synthesize_rag_response(state["user_query"], rag_results, lang, phone)
                 state["response_text"] = rag_out["text"]
                 state["next_questions"] = rag_out["next_questions"]
+                _append_step(state, "synthesizer", "RAG Response Synthesizer", f"Grounded {lang} reply from RAG chunks", "🤖", duration_ms=1)
                 return state
+            else:
+                _append_step(
+                    state,
+                    "rag",
+                    "RAG Database Retrieval",
+                    "No RAG match found — trying Live Web Search",
+                    "📚",
+                    duration_ms=rag_ms,
+                )
         except Exception as e:
             logger.warning(f"RAG retrieval error: {e}")
 
@@ -1654,6 +1762,7 @@ async def synthesizer_node(state: AgentState) -> AgentState:
         provider = cfg.get("web_search_provider", "duckduckgo")
         api_key = cfg.get("web_search_api_key", "")
         max_results = cfg.get("web_search_max_results", 4)
+        t_web = time.perf_counter()
         try:
             web_results = await perform_web_search(
                 query=state["user_query"],
@@ -1661,19 +1770,46 @@ async def synthesizer_node(state: AgentState) -> AgentState:
                 api_key=api_key,
                 max_results=max_results
             )
+            web_ms = max(1, int((time.perf_counter() - t_web) * 1000))
             if web_results:
+                _append_step(
+                    state,
+                    "web_search",
+                    "Live Web Search Fallback",
+                    f"Retrieved {len(web_results)} live results ({provider}/Wikipedia)",
+                    "🌐",
+                    duration_ms=web_ms,
+                )
                 state["breadcrumbs"] = ["Rajasthan", "Web Verified"]
                 state["resolution_stage"] = "web_search"
                 web_out = synthesize_web_response(state["user_query"], web_results, lang, phone)
                 state["response_text"] = web_out["text"]
                 state["next_questions"] = web_out["next_questions"]
+                _append_step(state, "synthesizer", "Web Response Synthesizer", f"Compiled cited {lang} answer", "🤖", duration_ms=1)
                 return state
+            else:
+                _append_step(
+                    state,
+                    "web_search",
+                    "Live Web Search Fallback",
+                    f"No external results found ({provider})",
+                    "🌐",
+                    duration_ms=web_ms,
+                )
         except Exception as e:
             logger.warning(f"Web search fallback error: {e}")
 
     # 4. Respectful Out-of-Records Fallback
     state["breadcrumbs"] = ["Rajasthan", "Query Search"]
     state["resolution_stage"] = "not_found_helpline"
+    _append_step(
+        state,
+        "synthesizer",
+        "Fallback Helpline Notice",
+        f"No DB/RAG/Web match — providing citizen helpline ({phone})",
+        "📞",
+        duration_ms=1,
+    )
     if lang == "hi":
         next_qs = [
             "पिनकोड 302029 का विवरण",

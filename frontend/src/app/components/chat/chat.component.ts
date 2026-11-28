@@ -536,6 +536,26 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.userAuthNotice = '';
   }
 
+  setUserAuthTab(tab: 'login' | 'register' | 'profile'): void {
+    this.userAuthTab = tab;
+    this.userAuthNotice = '';
+  }
+
+  private extractAuthError(err: any, fallback: string): string {
+    if (!err) return fallback;
+    const detail = err.error?.detail;
+    if (typeof detail === 'string' && detail.trim()) {
+      return detail;
+    }
+    if (Array.isArray(detail) && detail.length > 0) {
+      return detail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ');
+    }
+    if (err.status === 0) {
+      return 'Cannot reach backend server. Ensure FastAPI is running on port 8000.';
+    }
+    return err.message || fallback;
+  }
+
   onUserLogin(): void {
     if (this.userService.isLoggedIn()) {
       const cur = this.userService.currentUser();
@@ -553,13 +573,19 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       next: (res) => {
         this.isUserAuthLoading = false;
         this.userLoginForm.password = '';
+        this.userProfileForm = {
+          name: res.user.name || '',
+          phone: res.user.phone || '',
+          email: res.user.email || '',
+          preferred_language: res.user.preferred_language || 'en'
+        };
         this.userAuthNotice = `✓ Welcome back, ${res.user.name || res.user.username} ji!`;
         this.updateGreetingForUser(res.user.name);
-        setTimeout(() => this.closeUserAuthModal(), 1200);
+        setTimeout(() => this.closeUserAuthModal(), 900);
       },
       error: (err) => {
         this.isUserAuthLoading = false;
-        this.userAuthNotice = 'Login error: ' + (err.error?.detail || err.message || 'Invalid credentials.');
+        this.userAuthNotice = 'Login error: ' + this.extractAuthError(err, 'Invalid username or password.');
       }
     });
   }
@@ -585,13 +611,19 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       next: (res) => {
         this.isUserAuthLoading = false;
         this.userRegisterForm.password = '';
+        this.userProfileForm = {
+          name: res.user.name || '',
+          phone: res.user.phone || '',
+          email: res.user.email || '',
+          preferred_language: res.user.preferred_language || 'en'
+        };
         this.userAuthNotice = `✓ Profile created successfully! Welcome, ${res.user.name} ji!`;
         this.updateGreetingForUser(res.user.name);
-        setTimeout(() => this.closeUserAuthModal(), 1200);
+        setTimeout(() => this.closeUserAuthModal(), 900);
       },
       error: (err) => {
         this.isUserAuthLoading = false;
-        this.userAuthNotice = 'Registration error: ' + (err.error?.detail || err.message || 'Registration failed.');
+        this.userAuthNotice = 'Registration error: ' + this.extractAuthError(err, 'Registration failed.');
       }
     });
   }
@@ -607,18 +639,24 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       next: (res) => {
         this.isUserAuthLoading = false;
         this.userAuthNotice = '✓ Profile updated successfully!';
-        setTimeout(() => this.closeUserAuthModal(), 1200);
+        setTimeout(() => this.closeUserAuthModal(), 900);
       },
       error: (err) => {
         this.isUserAuthLoading = false;
-        this.userAuthNotice = 'Update error: ' + (err.error?.detail || err.message);
+        this.userAuthNotice = 'Update error: ' + this.extractAuthError(err, 'Could not update profile.');
       }
     });
   }
 
   onUserLogout(): void {
     this.userService.logout();
+    this.userAuthTab = 'login';
+    this.userAuthNotice = '';
     this.closeUserAuthModal();
+  }
+
+  onAdminLogout(): void {
+    this.auth.logout();
   }
 
   // --- Respectful First-Time Greeting & Name Setup (Req 9) ---
@@ -735,6 +773,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.isSidebarOpen = !this.isSidebarOpen;
   }
 
+  toggleSteps(msg: ChatMessage): void {
+    msg.stepsExpanded = !msg.stepsExpanded;
+  }
+
   useChip(prompt: string): void {
     this.inputQuery = prompt;
     this.sendMessage();
@@ -808,7 +850,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       text: '',
       timestamp: new Date(),
       isStreaming: true,
-      viewMode: 'preview'
+      viewMode: 'preview',
+      pipelineSteps: [],
+      stepsExpanded: true
     };
     this.messages.push(botMsg);
     this.isStreaming = true;
@@ -836,6 +880,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
           msg.mcpTool = meta.mcp_tool;
           msg.mcpTransport = meta.mcp_transport;
           msg.resolutionStage = meta.resolution_stage;
+          msg.latencyMs = meta.latency_ms;
+          if (Array.isArray(meta.pipeline_steps) && meta.pipeline_steps.length > 0) {
+            msg.pipelineSteps = meta.pipeline_steps.map((s: any) => ({ ...s, status: 'done' }));
+          } else if (msg.pipelineSteps) {
+            msg.pipelineSteps = msg.pipelineSteps.map(s => ({ ...s, status: 'done' }));
+          }
         }
         this.isStreaming = false;
       },
@@ -858,6 +908,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
               msg.mcpTool = res.mcp_tool;
               msg.mcpTransport = res.mcp_transport;
               msg.resolutionStage = res.resolution_stage;
+              msg.latencyMs = res.latency_ms;
+              if (Array.isArray(res.pipeline_steps)) {
+                msg.pipelineSteps = res.pipeline_steps.map((s: any) => ({ ...s, status: 'done' }));
+              }
             }
             this.isStreaming = false;
           },
@@ -874,7 +928,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
           }
         });
       },
-      this.selectedLanguage
+      this.selectedLanguage,
+      (step) => {
+        const msg = this.messages.find(m => m.id === botMsgId);
+        if (msg) {
+          const steps = msg.pipelineSteps ? [...msg.pipelineSteps] : [];
+          const idx = steps.findIndex(s => s.id === step.id);
+          if (idx >= 0) {
+            steps[idx] = step;
+          } else {
+            steps.push(step);
+          }
+          msg.pipelineSteps = steps;
+        }
+      }
     );
   }
 
@@ -888,6 +955,51 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.messages = [];
     this.sessionId = 'session-' + Math.random().toString(36).substring(2, 9);
     this.setupInitialGreeting();
+  }
+
+  isExportingChat: 'excel' | 'pdf' | null = null;
+
+  exportChat(format: 'excel' | 'pdf'): void {
+    if (this.isExportingChat || !this.messages.length) return;
+    this.isExportingChat = format;
+    const payload = {
+      session_id: this.sessionId,
+      language: this.selectedLanguage,
+      support_phone: this.supportPhone,
+      messages: this.messages.map((m) => ({
+        id: m.id,
+        sender: m.sender,
+        text: m.text,
+        timestamp: m.timestamp ? new Date(m.timestamp).toLocaleString() : '',
+        intent: m.intent || '',
+        breadcrumbs: m.breadcrumbs || [],
+        resolutionStage: m.resolutionStage || ''
+      }))
+    };
+
+    const obs = format === 'excel'
+      ? this.chatService.exportChatExcel(payload)
+      : this.chatService.exportChatPdf(payload);
+
+    obs.subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const ext = format === 'excel' ? 'xlsx' : 'pdf';
+        a.download = `rajmaster_chat_${this.sessionId}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        this.isExportingChat = null;
+      },
+      error: (err) => {
+        this.isExportingChat = null;
+        console.error(`Chat ${format} export failed:`, err);
+        alert(`Failed to export chat as ${format.toUpperCase()}. Please try again.`);
+      }
+    });
   }
 
   private scrollToBottom(): void {

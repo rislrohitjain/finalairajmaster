@@ -729,7 +729,15 @@ async def _fetch_geo_records(level: str, search: Optional[str], limit: int, offs
         elif level == "ulb":
             query = select(UrbanLocalBody, District.name_en.label("dist_name")).outerjoin(District, UrbanLocalBody.district_id == District.id).order_by(UrbanLocalBody.id)
             if search:
-                query = query.where(UrbanLocalBody.name_en.ilike(f"%{search}%") | UrbanLocalBody.name_hi.ilike(f"%{search}%") | UrbanLocalBody.code.ilike(f"%{search}%"))
+                sterm = f"%{search}%"
+                query = query.where(
+                    UrbanLocalBody.name_en.ilike(sterm)
+                    | UrbanLocalBody.name_hi.ilike(sterm)
+                    | UrbanLocalBody.code.ilike(sterm)
+                    | UrbanLocalBody.city_name.ilike(sterm)
+                    | District.name_en.ilike(sterm)
+                    | cast(UrbanLocalBody.lgd_code, Text).ilike(sterm)
+                )
             count_q = select(func.count()).select_from(query.subquery())
             total = (await session.execute(count_q)).scalar_one()
             res = (await session.execute(query.offset(offset).limit(limit))).all()
@@ -750,7 +758,15 @@ async def _fetch_geo_records(level: str, search: Optional[str], limit: int, offs
         elif level == "urban_ward":
             query = select(UrbanWard, UrbanLocalBody.name_en.label("ulb_name")).outerjoin(UrbanLocalBody, UrbanWard.ulb_id == UrbanLocalBody.id).order_by(UrbanWard.id)
             if search:
-                query = query.where(UrbanWard.ward_number.ilike(f"%{search}%") | UrbanWard.name_en.ilike(f"%{search}%") | UrbanWard.name_hi.ilike(f"%{search}%"))
+                sterm = f"%{search}%"
+                query = query.where(
+                    UrbanWard.ward_number.ilike(sterm)
+                    | UrbanWard.name_en.ilike(sterm)
+                    | UrbanWard.name_hi.ilike(sterm)
+                    | UrbanLocalBody.name_en.ilike(sterm)
+                    | UrbanLocalBody.city_name.ilike(sterm)
+                    | cast(UrbanWard.lgd_code, Text).ilike(sterm)
+                )
             count_q = select(func.count()).select_from(query.subquery())
             total = (await session.execute(count_q)).scalar_one()
             res = (await session.execute(query.offset(offset).limit(limit))).all()

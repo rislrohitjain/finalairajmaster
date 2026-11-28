@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { VoiceService, VoiceState, VoiceLanguage } from '../../services/voice.service';
-import { ChatService } from '../../services/chat.service';
+import { ChatService, PipelineStep } from '../../services/chat.service';
 
 @Component({
   selector: 'app-voice-agent',
@@ -26,6 +26,12 @@ export class VoiceAgentComponent implements OnInit, OnDestroy {
   agentSpokenText: string = '';
   agentFullResponse: string = '';
   nextExpectedQuestions: string[] = [];
+  pipelineSteps: PipelineStep[] = [];
+  isResponseStreaming: boolean = false;
+  showStepsPanel: boolean = true;
+  lastLatencyMs: number | null = null;
+  mcpUsed: boolean = false;
+  mcpTool: string = '';
 
   // Controls
   isMicMuted: boolean = false;
@@ -170,17 +176,39 @@ export class VoiceAgentComponent implements OnInit, OnDestroy {
   public processUserQuery(query: string): void {
     this.userTranscript = query;
     this.conversationHistory.push({ sender: 'user', text: query });
+    this.pipelineSteps = [];
+    this.agentSpokenText = '';
+    this.agentFullResponse = '';
+    this.isResponseStreaming = true;
+    this.showStepsPanel = true;
+    this.lastLatencyMs = null;
+    this.mcpUsed = false;
+    this.mcpTool = '';
     this.voiceService.setThinking();
 
-    this.chatService.sendMessage(this.sessionId, query, this.currentLanguage).subscribe({
-      next: (res) => {
-        this.agentFullResponse = res.response;
-        this.nextExpectedQuestions = res.next_questions || [];
-        this.conversationHistory.push({ sender: 'agent', text: res.response });
+    this.chatService.streamMessage(
+      this.sessionId,
+      query,
+      (token: string) => {
+        this.agentSpokenText += token.replace(/\*\*/g, '');
+        this.cdr.detectChanges();
+      },
+      (meta: any) => {
+        this.isResponseStreaming = false;
+        this.agentFullResponse = this.agentSpokenText.trim();
+        this.nextExpectedQuestions = meta.next_questions || [];
+        this.lastLatencyMs = meta.latency_ms ?? null;
+        this.mcpUsed = Boolean(meta.mcp_used);
+        this.mcpTool = meta.mcp_tool || '';
+        if (Array.isArray(meta.pipeline_steps) && meta.pipeline_steps.length > 0) {
+          this.pipelineSteps = meta.pipeline_steps.map((s: any) => ({ ...s, status: 'done' }));
+        } else {
+          this.pipelineSteps = this.pipelineSteps.map(s => ({ ...s, status: 'done' }));
+        }
+        this.conversationHistory.push({ sender: 'agent', text: this.agentFullResponse });
+        this.cdr.detectChanges();
 
-        // Speak response using Indian Female Voice
-        this.voiceService.speak(res.response, () => {
-          // Continuous loop: auto-listen for next user question if enabled!
+        this.voiceService.speak(this.agentFullResponse, () => {
           if (this.isContinuousMode && !this.isMicMuted) {
             setTimeout(() => {
               this.triggerListening();
@@ -188,14 +216,55 @@ export class VoiceAgentComponent implements OnInit, OnDestroy {
           }
         });
       },
-      error: (err) => {
-        const errorMsg = this.currentLanguage === 'hi' 
-          ? 'माफ़ कीजिए, डेटाबेस से संपर्क करने में समस्या हुई। कृपया पुनः प्रयास करें।'
-          : 'Sorry, could not connect to the Rajasthan database. Please try again.';
-        this.agentSpokenText = errorMsg;
-        this.voiceService.speak(errorMsg);
+      () => {
+        // Fallback to non-streaming POST /api/chat
+        this.chatService.sendMessage(this.sessionId, query, this.currentLanguage).subscribe({
+          next: (res) => {
+            this.isResponseStreaming = false;
+            this.agentFullResponse = res.response;
+            this.agentSpokenText = (res.response || '').replace(/\*\*/g, '');
+            this.nextExpectedQuestions = res.next_questions || [];
+            this.lastLatencyMs = res.latency_ms ?? null;
+            this.mcpUsed = Boolean(res.mcp_used);
+            this.mcpTool = res.mcp_tool || '';
+            if (Array.isArray(res.pipeline_steps)) {
+              this.pipelineSteps = res.pipeline_steps.map((s: any) => ({ ...s, status: 'done' }));
+            }
+            this.conversationHistory.push({ sender: 'agent', text: res.response });
+            this.cdr.detectChanges();
+
+            this.voiceService.speak(res.response, () => {
+              if (this.isContinuousMode && !this.isMicMuted) {
+                setTimeout(() => {
+                  this.triggerListening();
+                }, 800);
+              }
+            });
+          },
+          error: () => {
+            this.isResponseStreaming = false;
+            const errorMsg = this.currentLanguage === 'hi'
+              ? 'माफ़ कीजिए, डेटाबेस से संपर्क करने में समस्या हुई। कृपया पुनः प्रयास करें।'
+              : 'Sorry, could not connect to the Rajasthan database. Please try again.';
+            this.agentSpokenText = errorMsg;
+            this.cdr.detectChanges();
+            this.voiceService.speak(errorMsg);
+          }
+        });
+      },
+      this.currentLanguage,
+      (step: PipelineStep) => {
+        const steps = [...this.pipelineSteps];
+        const idx = steps.findIndex(s => s.id === step.id);
+        if (idx >= 0) {
+          steps[idx] = step;
+        } else {
+          steps.push(step);
+        }
+        this.pipelineSteps = steps;
+        this.cdr.detectChanges();
       }
-    });
+    );
   }
 
   // --- Manual Text Fallback ---

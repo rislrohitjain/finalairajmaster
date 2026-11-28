@@ -113,13 +113,16 @@ async def fetch_master(master_name: str, page_size: int = 5000) -> List[Dict[str
                 try:
                     resp = await client.post(f"{PORTAL_URL}/Home/ListData", json=payload, headers=headers_post)
                     resp.raise_for_status()
+                    if "Error" in str(resp.url):
+                        raise RuntimeError(f"Portal redirected to error page for Size={payload['Size']}")
                     data = resp.json()
                     break
                 except Exception as exc:
                     if attempt == 3:
                         raise
                     logger.warning(f"[{master_name}] page {page} retry {attempt+1}: {exc}")
-                    await asyncio.sleep(2 * (attempt + 1))
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    await client.get(f"{PORTAL_URL}/Home/List?master={master_name}", headers=headers_get)
 
             raw_rows = (data or {}).get("data") or []
             if total_count is None:
@@ -335,7 +338,7 @@ async def run_sync() -> None:
         # ------------------------------------------------------------------
         # 3. WARD RAJASTHAN (10,245) -> raj_masters.wards + public.urban_wards
         # ------------------------------------------------------------------
-        ward_rows = await fetch_master("WARD RAJASTHAN", page_size=5000)
+        ward_rows = await fetch_master("WARD RAJASTHAN", page_size=1000)
         logger.info(f"Syncing {len(ward_rows)} Urban Wards...")
 
         rm_ward_batch = []
@@ -430,7 +433,7 @@ async def run_sync() -> None:
         # ------------------------------------------------------------------
         # 5. ILR RAJASTHAN (2,815) & PATWAR RAJASTHAN (11,336)
         # ------------------------------------------------------------------
-        ilr_rows = await fetch_master("ILR RAJASTHAN", page_size=5000)
+        ilr_rows = await fetch_master("ILR RAJASTHAN", page_size=1000)
         logger.info(f"Syncing {len(ilr_rows)} ILR Circles...")
         rm_ilr_batch = []
         for r in ilr_rows:
@@ -461,7 +464,7 @@ async def run_sync() -> None:
 
         rm_ilr_rid_set = {r["raj_master_id"] for r in await conn.fetch("SELECT raj_master_id FROM raj_masters.ilr_circles")}
 
-        patwar_rows = await fetch_master("PATWAR RAJASTHAN", page_size=5000)
+        patwar_rows = await fetch_master("PATWAR RAJASTHAN", page_size=1000)
         logger.info(f"Syncing {len(patwar_rows)} Patwar Circles...")
         rm_pat_batch = []
         for r in patwar_rows:
@@ -503,7 +506,7 @@ async def run_sync() -> None:
                 b.raj_master_id,
                 COALESCE(d.raj_master_id, b.district_id),
                 gh.gp_code,
-                gh.gp_lgcode::text,
+                gh.gp_lgdcode::text,
                 gh.gp_eng,
                 gh.gp_mangal,
                 'Sarpanch, GP ' || gh.gp_eng,
@@ -526,7 +529,7 @@ async def run_sync() -> None:
                 COALESCE(d.raj_master_id, t.district_id),
                 gp.raj_master_id,
                 vh.village_code,
-                vh.village_lgcode::text,
+                vh.village_lgdcode::text,
                 vh.village_eng,
                 vh.village_mangal,
                 TRUE,

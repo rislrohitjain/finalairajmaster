@@ -11,7 +11,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const token = authService.getToken();
   let authReq = req;
 
-  if (token && !req.headers.has('Authorization')) {
+  if (token && req.url.includes('/admin/') && !req.headers.has('Authorization')) {
     authReq = req.clone({
       headers: req.headers.set('Authorization', `Bearer ${token}`)
     });

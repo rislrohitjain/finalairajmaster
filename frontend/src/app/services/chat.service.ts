@@ -3,6 +3,15 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
+export interface PipelineStep {
+  id: string;
+  title: string;
+  detail?: string;
+  status: 'running' | 'done' | 'error';
+  icon?: string;
+  duration_ms?: number;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';
@@ -21,6 +30,9 @@ export interface ChatMessage {
   mcpTool?: string;
   mcpTransport?: string;
   resolutionStage?: string;
+  pipelineSteps?: PipelineStep[];
+  stepsExpanded?: boolean;
+  latencyMs?: number;
 }
 
 export interface CapabilityData {
@@ -90,7 +102,8 @@ export class ChatService {
     onToken: (token: string) => void,
     onComplete: (meta: any) => void,
     onError: (err: any) => void,
-    language: string = 'en'
+    language: string = 'en',
+    onStep?: (step: PipelineStep) => void
   ) {
     try {
       const response = await fetch(`${this.apiUrl}/chat/stream`, {
@@ -131,6 +144,9 @@ export class ChatService {
             const jsonStr = trimmed.substring(6);
             try {
               const data = JSON.parse(jsonStr);
+              if (data.type === 'step' && data.step && onStep) {
+                onStep(data.step);
+              }
               if (data.token) {
                 onToken(data.token);
               }
@@ -147,5 +163,13 @@ export class ChatService {
     } catch (err) {
       onError(err);
     }
+  }
+
+  exportChatExcel(payload: { session_id: string; language: string; support_phone?: string; messages: any[] }): Observable<Blob> {
+    return this.http.post(`${this.apiUrl}/chat/export/excel`, payload, { responseType: 'blob' });
+  }
+
+  exportChatPdf(payload: { session_id: string; language: string; support_phone?: string; messages: any[] }): Observable<Blob> {
+    return this.http.post(`${this.apiUrl}/chat/export/pdf`, payload, { responseType: 'blob' });
   }
 }
