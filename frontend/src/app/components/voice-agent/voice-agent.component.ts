@@ -1,15 +1,16 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { VoiceService, VoiceState, VoiceLanguage } from '../../services/voice.service';
 import { ChatService, PipelineStep } from '../../services/chat.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-voice-agent',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './voice-agent.component.html',
   styleUrls: ['./voice-agent.component.css']
 })
@@ -68,8 +69,21 @@ export class VoiceAgentComponent implements OnInit, OnDestroy {
     public voiceService: VoiceService,
     private chatService: ChatService,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    public auth: AuthService
   ) {}
+
+  onBrandClick(event?: Event): void {
+    if (event) event.preventDefault();
+    this.voiceService.stopListening();
+    this.voiceService.stopSpeaking();
+    this.close.emit();
+    if (this.auth.isLoggedIn()) {
+      this.router.navigate(['/admin/dashboard']);
+    } else {
+      this.router.navigate(['/']);
+    }
+  }
 
   ngOnInit(): void {
     if (this.router.url.includes('/voice')) {

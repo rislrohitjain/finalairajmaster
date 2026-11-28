@@ -11,13 +11,15 @@
   <header class="relative z-20 px-3 sm:px-8 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-[#070A13]/75 backdrop-blur-md">
     
     <!-- Left: Branding & Vocal Badge -->
-    <div class="flex items-center space-x-2.5 sm:space-x-3">
-      <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 border border-white/20 shrink-0">
+    <a [routerLink]="auth.isLoggedIn() ? '/admin/dashboard' : '/'" (click)="onBrandClick($event)"
+       class="flex items-center space-x-2.5 sm:space-x-3 cursor-pointer group hover:opacity-90 transition-opacity"
+       [title]="auth.isLoggedIn() ? 'Go to Admin Dashboard' : 'Return to Chat Home'">
+      <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 border border-white/20 shrink-0 group-hover:scale-105 transition-transform">
         <span class="text-base sm:text-lg">✨</span>
       </div>
       <div>
         <div class="flex items-center space-x-1.5 sm:space-x-2">
-          <h1 class="font-extrabold text-sm sm:text-base tracking-wide bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+          <h1 class="font-extrabold text-sm sm:text-base tracking-wide bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent group-hover:from-amber-200 group-hover:to-white transition-all">
             Jain Live Voice
           </h1>
           <span class="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -30,7 +32,7 @@
           Authentic Indian Female Vocal (Swara / Neerja) • Full-Stack AI & LLM Architecture Showcase
         </p>
       </div>
-    </div>
+    </a>
 
     <!-- Right: Auto-Listen Mode & Exit Button (kept on top row for compact mobile fit) -->
     <div class="flex items-center space-x-1.5 sm:space-x-3 order-2 sm:order-3">

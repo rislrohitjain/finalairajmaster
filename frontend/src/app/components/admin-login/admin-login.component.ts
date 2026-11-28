@@ -18,10 +18,19 @@ export class AdminLoginComponent implements OnInit {
   isLoading: boolean = false;
 
   constructor(
-    private auth: AuthService,
+    public auth: AuthService,
     private router: Router,
     private route: ActivatedRoute
   ) {}
+
+  onBrandClick(event?: Event): void {
+    if (event) event.preventDefault();
+    if (this.auth.isLoggedIn()) {
+      this.router.navigate(['/admin/dashboard']);
+    } else {
+      this.router.navigate(['/']);
+    }
+  }
 
   ngOnInit(): void {
     this.route.queryParams.subscribe(params => {

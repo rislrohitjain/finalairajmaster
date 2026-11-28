@@ -98,6 +98,16 @@ export class AdminDashboardComponent implements OnInit {
     private router: Router
   ) {}
 
+  onBrandClick(event?: Event): void {
+    if (event) event.preventDefault();
+    if (this.auth.isLoggedIn()) {
+      this.activeTab = 'llm';
+      this.router.navigate(['/admin/dashboard']);
+    } else {
+      this.router.navigate(['/']);
+    }
+  }
+
   ngOnInit(): void {
     this.loadLLMConfig();
     this.loadStats();

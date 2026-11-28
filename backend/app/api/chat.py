@@ -7,10 +7,11 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 from app.agent.graph import rajmaster_agent
 from app.agent.tools import lookup_geographic_hierarchy
 from app.db.session import AsyncSessionLocal
@@ -179,6 +180,165 @@ async def geo_search(q: str = Query(..., min_length=2)):
     """Direct instant lookup across all 6 Rajasthan geographic levels"""
     result = await lookup_geographic_hierarchy(q)
     return result
+
+
+@router.get("/geo/reverse")
+async def reverse_geocode_location(
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+):
+    """Resolves real browser coordinates to locality, city, district, state, pincode, and dynamic Quick questions."""
+    from app.db.models import Pincode, District, Division
+
+    addr: Dict[str, Any] = {}
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={
+                    "format": "jsonv2",
+                    "lat": round(lat, 6),
+                    "lon": round(lon, 6),
+                    "addressdetails": 1,
+                    "zoom": 16,
+                },
+                headers={"User-Agent": "RajMasterAI-EduShowcase/1.0"},
+            )
+            if resp.status_code == 200:
+                payload = resp.json()
+                addr = payload.get("address") if isinstance(payload, dict) else {}
+    except Exception as e:
+        logger.debug(f"Reverse geocode external lookup skipped ({e})")
+
+    if not addr:
+        return {
+            "status": "unavailable",
+            "locality": None,
+            "city": None,
+            "district": None,
+            "state": None,
+            "pincode": None,
+            "display_label": None,
+            "in_rajasthan": False,
+            "matched_in_db": False,
+            "quick_questions": [],
+        }
+
+    locality = (
+        addr.get("suburb")
+        or addr.get("neighbourhood")
+        or addr.get("residential")
+        or addr.get("village")
+        or addr.get("hamlet")
+        or ""
+    ).strip()
+    city = (
+        addr.get("city")
+        or addr.get("town")
+        or addr.get("municipality")
+        or addr.get("village")
+        or ""
+    ).strip()
+    raw_district = (addr.get("state_district") or addr.get("county") or "").strip()
+    district = re.sub(r"\s+district$", "", raw_district, flags=re.IGNORECASE).strip()
+    state_name = (addr.get("state") or "").strip()
+
+    raw_post = str(addr.get("postcode") or "").strip()
+    pin_match = re.search(r"\b(\d{6})\b", raw_post)
+    pincode = pin_match.group(1) if pin_match else (raw_post or "")
+
+    in_rajasthan = ("rajasthan" in state_name.lower()) or bool(
+        pincode and len(pincode) == 6 and pincode[:2] in {"30", "31", "32", "33", "34"}
+    )
+    matched_in_db = False
+    db_division: Optional[str] = None
+
+    try:
+        async with AsyncSessionLocal() as session:
+            if pincode:
+                pin_row = (
+                    await session.execute(select(Pincode).where(Pincode.pincode == pincode).limit(1))
+                ).scalar_one_or_none()
+                if pin_row:
+                    matched_in_db = True
+                    if pin_row.division_id:
+                        div_row = (
+                            await session.execute(select(Division).where(Division.id == pin_row.division_id))
+                        ).scalar_one_or_none()
+                        if div_row:
+                            db_division = div_row.name_en
+            dist_candidate = district or city
+            if dist_candidate:
+                dist_row = (
+                    await session.execute(
+                        select(District).where(District.name_en.ilike(f"%{dist_candidate}%")).limit(1)
+                    )
+                ).scalar_one_or_none()
+                if dist_row:
+                    matched_in_db = True
+                    in_rajasthan = True
+                    district = dist_row.name_en
+                    if dist_row.division_id and not db_division:
+                        div_row = (
+                            await session.execute(select(Division).where(Division.id == dist_row.division_id))
+                        ).scalar_one_or_none()
+                        if div_row:
+                            db_division = div_row.name_en
+    except Exception as e:
+        logger.debug(f"DB enrichment skipped in reverse_geocode: {e}")
+
+    primary_place = locality or city or district or state_name
+    place_with_city = (
+        f"{locality}, {city}"
+        if locality and city and locality.lower() != city.lower()
+        else (city or district or locality or state_name)
+    )
+
+    label_parts = [p for p in [place_with_city, pincode] if p]
+    display_label = " • ".join(label_parts) if label_parts else "Current Location"
+
+    quick_questions: List[str] = []
+    if pincode:
+        quick_questions.append(f"Details of pincode {pincode}")
+        if locality and city and locality.lower() != city.lower():
+            quick_questions.append(
+                f"Which tehsil, block, or ULB covers {locality}, {city} (pincode {pincode})?"
+            )
+        elif place_with_city:
+            quick_questions.append(
+                f"Which division and district cover {place_with_city} pincode {pincode}?"
+            )
+    if district:
+        quick_questions.append(f"Tell me about {district} administrative hierarchy")
+    elif primary_place:
+        quick_questions.append(f"Tell me about {primary_place} administrative hierarchy")
+
+    if in_rajasthan and district:
+        quick_questions.append(f"How many tehsils are in {district} district?")
+
+    for fallback_q in [
+        "Tell me about Muhana village administrative hierarchy",
+        "Which division does Balotra district belong to?",
+        "List all 10 divisions of Rajasthan",
+    ]:
+        if len(quick_questions) >= 6:
+            break
+        if fallback_q not in quick_questions:
+            quick_questions.append(fallback_q)
+
+    return {
+        "status": "ok",
+        "locality": locality or None,
+        "city": city or None,
+        "district": district or None,
+        "state": state_name or None,
+        "pincode": pincode or None,
+        "division": db_division,
+        "display_label": display_label,
+        "in_rajasthan": in_rajasthan,
+        "matched_in_db": matched_in_db,
+        "quick_questions": quick_questions,
+    }
 
 @router.post("/ingest")
 async def ingest_document(req: IngestRequest, current_admin: Admin = Depends(get_current_admin)):

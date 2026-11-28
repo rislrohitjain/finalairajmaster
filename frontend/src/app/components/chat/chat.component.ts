@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ChatService, ChatMessage, CapabilityData, ExampleQuestion } from '../../services/chat.service';
 import { AuthService } from '../../services/auth.service';
@@ -27,6 +27,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   mcpStatus: any = null;
   supportPhone: string = '89988555525';
   readonly resumeUrl: string = 'https://rohitjain-resume.vercel.app/';
+  detectedLocationLabel: string = '';
+  detectedPincode: string = '';
+  isLocatingUser: boolean = false;
+  locationNotice: string = '';
   quickChips: string[] = [
     'Tell me about Muhana village administrative hierarchy',
     'Which division does Balotra district belong to?',
@@ -283,8 +287,24 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     public chatService: ChatService,
     public auth: AuthService,
     public userService: UserService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private router: Router
   ) {}
+
+  onBrandClick(event?: Event): void {
+    if (event) {
+      event.preventDefault();
+    }
+    if (this.auth.isLoggedIn()) {
+      this.router.navigate(['/admin/dashboard']);
+    } else {
+      if (this.isChatHidden) {
+        this.isChatHidden = false;
+        this.resetInactivityTimer();
+      }
+      this.router.navigate(['/']);
+    }
+  }
 
   setViewMode(msg: ChatMessage, mode: 'preview' | 'raw'): void {
     msg.viewMode = mode;
@@ -425,6 +445,56 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.loadCapabilities();
     this.loadMcpStatus();
     this.loadExampleQuestions();
+    this.detectUserLocation(false);
+  }
+
+  detectUserLocation(manualClick: boolean = false): void {
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      if (manualClick) {
+        this.locationNotice = 'Browser location is unavailable on this device.';
+      }
+      return;
+    }
+    if (this.isLocatingUser) return;
+
+    this.isLocatingUser = true;
+    this.locationNotice = '';
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        this.chatService.reverseGeocode(lat, lon).subscribe({
+          next: (res) => {
+            this.isLocatingUser = false;
+            if (res && res.status === 'ok') {
+              this.detectedLocationLabel = res.display_label || '';
+              this.detectedPincode = res.pincode || '';
+              if (Array.isArray(res.quick_questions) && res.quick_questions.length > 0) {
+                this.quickChips = res.quick_questions;
+              }
+            } else if (manualClick) {
+              this.locationNotice = 'Could not resolve your address/pincode right now.';
+            }
+          },
+          error: () => {
+            this.isLocatingUser = false;
+            if (manualClick) {
+              this.locationNotice = 'Location lookup service unavailable right now.';
+            }
+          }
+        });
+      },
+      (err) => {
+        this.isLocatingUser = false;
+        if (err?.code === 1) {
+          this.locationNotice = 'Location permission denied. Allow browser location & click to retry.';
+        } else if (manualClick) {
+          this.locationNotice = 'Unable to retrieve your GPS coordinates.';
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
   }
 
   loadMcpStatus(): void {

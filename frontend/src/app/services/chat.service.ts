@@ -88,6 +88,10 @@ export class ChatService {
     return this.http.get<any>(`${this.apiUrl}/geo/search?q=${encodeURIComponent(query)}`);
   }
 
+  reverseGeocode(lat: number, lon: number): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/geo/reverse?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`);
+  }
+
   sendMessage(sessionId: string, query: string, language: string = 'en'): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/chat`, {
       session_id: sessionId,
