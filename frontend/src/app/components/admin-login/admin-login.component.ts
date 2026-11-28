@@ -45,6 +45,11 @@ export class AdminLoginComponent implements OnInit {
     }
     if (this.isLoading) return;
 
+    if (this.auth.isLoggedIn()) {
+      this.errorMessage = `Admin "${this.auth.currentUser() || 'active'}" is already logged in. Please log out first before signing in as another user.`;
+      return;
+    }
+
     const u = (this.username || '').trim();
     const p = (this.password || '').trim();
 

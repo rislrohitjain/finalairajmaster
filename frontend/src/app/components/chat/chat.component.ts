@@ -24,11 +24,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   isStreaming: boolean = false;
   isSidebarOpen: boolean = false;
   capabilities: CapabilityData | null = null;
+  mcpStatus: any = null;
   supportPhone: string = '89988555525';
+  readonly resumeUrl: string = 'https://rohitjain-resume.vercel.app/';
   quickChips: string[] = [
     'Tell me about Muhana village administrative hierarchy',
     'Which division does Balotra district belong to?',
     'Details of pincode 302029',
+    'Show database stats via MCP',
     'Who heads Sanganer tehsil and panchayat samiti?',
     'List all 10 divisions of Rajasthan',
     'What urban local body covers Malviya Nagar, Jaipur?'
@@ -240,10 +243,24 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   copiedMessageId: string | null = null;
 
-  // --- WhatsApp-Style Inactivity Privacy Shield (Req 7) ---
-  inactivitySecondsRemaining: number = 120; // 2 minutes
+  // --- WhatsApp-Style Inactivity Privacy Shield (Req 7 & Activity Enhancement) ---
+  autoHideMinutes: number = 2; // User-selectable: 0 (Off/Manual), 1, 2, 5
+  inactivitySecondsRemaining: number = 120; // 2 minutes default
   isChatHidden: boolean = false;
   private inactivityInterval: any = null;
+  private lastActivityThrottle: number = 0;
+  private manualHideUntil: number = 0;
+  private readonly activityEvents: string[] = [
+    'mousemove',
+    'pointermove',
+    'mousedown',
+    'click',
+    'keydown',
+    'touchstart',
+    'pointerdown',
+    'wheel',
+    'scroll'
+  ];
   private activityListener = () => this.onUserActivity();
 
   // --- User Auth & Profile Modal (Req 8) ---
@@ -376,7 +393,19 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   ngOnInit(): void {
     this.initInactivityTimer();
     this.loadCapabilities();
+    this.loadMcpStatus();
     this.loadExampleQuestions();
+  }
+
+  loadMcpStatus(): void {
+    this.chatService.getMcpStatus().subscribe({
+      next: (res) => {
+        this.mcpStatus = res;
+      },
+      error: () => {
+        this.mcpStatus = null;
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -384,58 +413,98 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       clearInterval(this.inactivityInterval);
     }
     if (typeof window !== 'undefined') {
-      window.removeEventListener('mousemove', this.activityListener);
-      window.removeEventListener('keydown', this.activityListener);
-      window.removeEventListener('touchstart', this.activityListener);
-      window.removeEventListener('click', this.activityListener);
+      this.activityEvents.forEach((evt) => {
+        window.removeEventListener(evt, this.activityListener, true);
+        window.removeEventListener(evt, this.activityListener, false);
+      });
     }
   }
 
-  // --- WhatsApp-Style Inactivity Privacy Shield Methods (Req 7) ---
+  // --- WhatsApp-Style Inactivity Privacy Shield Methods (Req 7 & Activity Tracking) ---
   private initInactivityTimer(): void {
-    this.inactivitySecondsRemaining = 120;
-    this.isChatHidden = false;
-
     if (typeof window !== 'undefined') {
-      window.addEventListener('mousemove', this.activityListener, { passive: true });
-      window.addEventListener('keydown', this.activityListener, { passive: true });
-      window.addEventListener('touchstart', this.activityListener, { passive: true });
-      window.addEventListener('click', this.activityListener, { passive: true });
+      const savedMins = Number(localStorage.getItem('rajmaster_chat_autohide_minutes'));
+      if ([0, 1, 2, 5].includes(savedMins)) {
+        this.autoHideMinutes = savedMins;
+      }
+      this.activityEvents.forEach((evt) => {
+        window.addEventListener(evt, this.activityListener, { passive: true, capture: true });
+      });
     }
+
+    this.inactivitySecondsRemaining = this.autoHideMinutes > 0 ? this.autoHideMinutes * 60 : 120;
+    this.isChatHidden = false;
 
     if (this.inactivityInterval) {
       clearInterval(this.inactivityInterval);
     }
 
     this.inactivityInterval = setInterval(() => {
-      if (this.inactivitySecondsRemaining > 0) {
+      if (!this.isChatHidden && this.autoHideMinutes > 0 && this.inactivitySecondsRemaining > 0) {
         this.inactivitySecondsRemaining--;
         if (this.inactivitySecondsRemaining === 0) {
-          this.isChatHidden = true; // Auto-hide chat after 2 minutes of inactivity
+          this.isChatHidden = true; // Auto-hide chat after inactivity timeout
         }
       }
     }, 1000);
   }
 
-  private onUserActivity(): void {
-    if (!this.isChatHidden) {
-      this.inactivitySecondsRemaining = 120;
+  setAutoHideMinutes(mins: number): void {
+    const valid = [0, 1, 2, 5].includes(mins) ? mins : 2;
+    this.autoHideMinutes = valid;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rajmaster_chat_autohide_minutes', String(valid));
+    }
+    this.inactivitySecondsRemaining = valid > 0 ? valid * 60 : 120;
+  }
+
+  onUserActivity(): void {
+    const now = Date.now();
+    // Do not auto-unhide if user just clicked the manual "Hide Chat" button within the last 1.2s
+    if (now < this.manualHideUntil) {
+      return;
+    }
+
+    // Moving mouse or clicking actively unhides the chat if obscured
+    if (this.isChatHidden) {
+      this.isChatHidden = false;
+    }
+
+    // Throttle resetting the inactivity seconds remaining counter to once every 200ms
+    if (now - this.lastActivityThrottle < 200) {
+      return;
+    }
+    this.lastActivityThrottle = now;
+
+    if (this.autoHideMinutes > 0) {
+      this.inactivitySecondsRemaining = this.autoHideMinutes * 60;
     }
   }
 
   toggleChatPrivacy(): void {
-    this.isChatHidden = !this.isChatHidden;
     if (!this.isChatHidden) {
-      this.inactivitySecondsRemaining = 120;
+      this.manualHideUntil = Date.now() + 1200;
+      this.isChatHidden = true;
+    } else {
+      this.isChatHidden = false;
+      this.inactivitySecondsRemaining = this.autoHideMinutes > 0 ? this.autoHideMinutes * 60 : 120;
     }
+  }
+
+  hideChatNow(): void {
+    this.manualHideUntil = Date.now() + 1200;
+    this.isChatHidden = true;
   }
 
   revealChat(): void {
     this.isChatHidden = false;
-    this.inactivitySecondsRemaining = 120;
+    this.inactivitySecondsRemaining = this.autoHideMinutes > 0 ? this.autoHideMinutes * 60 : 120;
   }
 
   get formattedInactivityTime(): string {
+    if (this.autoHideMinutes === 0) {
+      return 'Manual';
+    }
     const mins = Math.floor(this.inactivitySecondsRemaining / 60);
     const secs = this.inactivitySecondsRemaining % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -443,16 +512,21 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   // --- User Auth & Profile Modal Methods (Req 8) ---
   openUserAuthModal(tab: 'login' | 'register' | 'profile' = 'login'): void {
-    this.userAuthTab = tab;
     this.userAuthNotice = '';
     const current = this.userService.currentUser();
-    if (current) {
+    if (this.userService.isLoggedIn() && current) {
+      this.userAuthTab = 'profile';
+      if (tab === 'login' || tab === 'register') {
+        this.userAuthNotice = `User "${current.name || current.username}" is already logged in. Please sign out first to log in another user.`;
+      }
       this.userProfileForm = {
         name: current.name || '',
         phone: current.phone || '',
         email: current.email || '',
         preferred_language: current.preferred_language || 'en'
       };
+    } else {
+      this.userAuthTab = tab === 'profile' ? 'login' : tab;
     }
     this.isUserAuthModalOpen = true;
   }
@@ -463,29 +537,46 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   onUserLogin(): void {
-    if (!this.userLoginForm.username.trim()) {
-      this.userAuthNotice = 'Please enter your username, phone, or email.';
+    if (this.userService.isLoggedIn()) {
+      const cur = this.userService.currentUser();
+      this.userAuthTab = 'profile';
+      this.userAuthNotice = `User "${cur?.name || cur?.username}" is already logged in. Sign out first to switch accounts.`;
+      return;
+    }
+    if (!this.userLoginForm.username.trim() || !this.userLoginForm.password.trim()) {
+      this.userAuthNotice = 'Please enter both username and password.';
       return;
     }
     this.isUserAuthLoading = true;
     this.userAuthNotice = 'Signing in...';
-    this.userService.login(this.userLoginForm.username, this.userLoginForm.password).subscribe({
+    this.userService.login(this.userLoginForm.username.trim(), this.userLoginForm.password).subscribe({
       next: (res) => {
         this.isUserAuthLoading = false;
+        this.userLoginForm.password = '';
         this.userAuthNotice = `✓ Welcome back, ${res.user.name || res.user.username} ji!`;
         this.updateGreetingForUser(res.user.name);
         setTimeout(() => this.closeUserAuthModal(), 1200);
       },
       error: (err) => {
         this.isUserAuthLoading = false;
-        this.userAuthNotice = 'Login error: ' + (err.error?.detail || err.message);
+        this.userAuthNotice = 'Login error: ' + (err.error?.detail || err.message || 'Invalid credentials.');
       }
     });
   }
 
   onUserRegister(): void {
+    if (this.userService.isLoggedIn()) {
+      const cur = this.userService.currentUser();
+      this.userAuthTab = 'profile';
+      this.userAuthNotice = `User "${cur?.name || cur?.username}" is already logged in. Sign out first to register another user.`;
+      return;
+    }
     if (!this.userRegisterForm.name.trim() || !this.userRegisterForm.username.trim()) {
       this.userAuthNotice = 'Please enter your full name and a username / mobile.';
+      return;
+    }
+    if (!this.userRegisterForm.password || this.userRegisterForm.password.trim().length < 4) {
+      this.userAuthNotice = 'Please create a password of at least 4 characters.';
       return;
     }
     this.isUserAuthLoading = true;
@@ -493,13 +584,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.userService.register(this.userRegisterForm).subscribe({
       next: (res) => {
         this.isUserAuthLoading = false;
+        this.userRegisterForm.password = '';
         this.userAuthNotice = `✓ Profile created successfully! Welcome, ${res.user.name} ji!`;
         this.updateGreetingForUser(res.user.name);
         setTimeout(() => this.closeUserAuthModal(), 1200);
       },
       error: (err) => {
         this.isUserAuthLoading = false;
-        this.userAuthNotice = 'Registration error: ' + (err.error?.detail || err.message);
+        this.userAuthNotice = 'Registration error: ' + (err.error?.detail || err.message || 'Registration failed.');
       }
     });
   }
@@ -532,7 +624,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   // --- Respectful First-Time Greeting & Name Setup (Req 9) ---
   private setupInitialGreeting(customGreeting?: string): void {
     const user = this.userService.currentUser();
-    const userName = user?.name ? user.name.trim() : '';
+    const userName = (user?.name || this.userService.guestName() || '').trim();
 
     let greetingText = '';
     if (userName) {
@@ -740,6 +832,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
           msg.breadcrumbs = meta.breadcrumbs;
           msg.helplineCard = meta.helpline_card;
           msg.supportPhone = meta.support_phone || this.supportPhone;
+          msg.mcpUsed = Boolean(meta.mcp_used);
+          msg.mcpTool = meta.mcp_tool;
+          msg.mcpTransport = meta.mcp_transport;
+          msg.resolutionStage = meta.resolution_stage;
         }
         this.isStreaming = false;
       },
@@ -758,6 +854,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
               msg.breadcrumbs = res.breadcrumbs;
               msg.helplineCard = res.helpline_card;
               msg.supportPhone = res.support_phone || this.supportPhone;
+              msg.mcpUsed = Boolean(res.mcp_used);
+              msg.mcpTool = res.mcp_tool;
+              msg.mcpTransport = res.mcp_transport;
+              msg.resolutionStage = res.resolution_stage;
             }
             this.isStreaming = false;
           },

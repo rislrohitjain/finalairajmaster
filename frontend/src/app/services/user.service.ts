@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, tap, of, catchError } from 'rxjs';
+import { Observable, tap, of, catchError, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 export interface UserProfile {
@@ -27,20 +27,50 @@ export class UserService {
   private apiUrl = `${environment.apiUrl}/user`;
   private tokenKey = 'rajmaster_user_token';
   private profileKey = 'rajmaster_user_profile';
+  private guestNameKey = 'rajmaster_guest_name';
 
   currentUser = signal<UserProfile | null>(this.getStoredProfile());
   isLoggedIn = signal<boolean>(this.checkLoggedIn());
+  guestName = signal<string>(this.getStoredGuestName());
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) {
+    if (!this.isLoggedIn()) {
+      this.currentUser.set(null);
+    }
+  }
+
+  private isTokenValidJwt(token: string | null): boolean {
+    if (!token || token === 'null' || token === 'undefined') return false;
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return false;
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64));
+      if (!payload.sub) return false;
+      if (payload.exp && payload.exp * 1000 <= Date.now()) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   private checkLoggedIn(): boolean {
     const token = localStorage.getItem(this.tokenKey);
     const profile = localStorage.getItem(this.profileKey);
-    return !!(token && profile);
+    if (!token || !profile || !this.isTokenValidJwt(token)) {
+      if (token || profile) {
+        localStorage.removeItem(this.tokenKey);
+        localStorage.removeItem(this.profileKey);
+      }
+      return false;
+    }
+    return true;
   }
 
   getStoredProfile(): UserProfile | null {
     try {
+      const token = localStorage.getItem(this.tokenKey);
+      if (!this.isTokenValidJwt(token)) return null;
       const data = localStorage.getItem(this.profileKey);
       return data ? JSON.parse(data) : null;
     } catch {
@@ -48,74 +78,58 @@ export class UserService {
     }
   }
 
+  private getStoredGuestName(): string {
+    try {
+      return localStorage.getItem(this.guestNameKey) || '';
+    } catch {
+      return '';
+    }
+  }
+
   getStoredToken(): string | null {
-    return localStorage.getItem(this.tokenKey);
+    const token = localStorage.getItem(this.tokenKey);
+    return this.isTokenValidJwt(token) ? token : null;
   }
 
   getAuthHeaders(): HttpHeaders {
     const token = this.getStoredToken();
-    return new HttpHeaders({
-      'Authorization': token ? `Bearer ${token}` : ''
-    });
+    return token
+      ? new HttpHeaders({ 'Authorization': `Bearer ${token}` })
+      : new HttpHeaders();
   }
 
-  register(data: { name: string; username: string; phone?: string; email?: string; password?: string; preferred_language?: string }): Observable<UserAuthResponse> {
-    return this.http.post<UserAuthResponse>(`${this.apiUrl}/register`, data).pipe(
+  register(data: { name: string; username: string; phone?: string; email?: string; password: string; preferred_language?: string }): Observable<UserAuthResponse> {
+    if (this.isLoggedIn()) {
+      const activeName = this.currentUser()?.username || 'current user';
+      return throwError(() => ({
+        status: 409,
+        error: { detail: `User "${activeName}" is already logged in. Please sign out first before creating or logging into another account.` }
+      }));
+    }
+
+    return this.http.post<UserAuthResponse>(`${this.apiUrl}/register`, data, { headers: this.getAuthHeaders() }).pipe(
       tap(res => {
-        if (res && res.user) {
+        if (res && res.access_token && res.user) {
           this.setSession(res.access_token, res.user);
         }
-      }),
-      catchError(err => {
-        // Fallback local registration
-        const fallbackUser: UserProfile = {
-          id: Date.now() % 1000000,
-          username: data.username.trim().toLowerCase(),
-          name: data.name.trim(),
-          phone: data.phone || '',
-          email: data.email || '',
-          preferred_language: data.preferred_language || 'hi',
-          role: 'user',
-          created_at: new Date().toISOString()
-        };
-        const fallbackRes: UserAuthResponse = {
-          access_token: 'usr_local_' + Math.random().toString(36).substring(2),
-          token_type: 'bearer',
-          user: fallbackUser
-        };
-        this.setSession(fallbackRes.access_token, fallbackUser);
-        return of(fallbackRes);
       })
     );
   }
 
-  login(username: string, password?: string): Observable<UserAuthResponse> {
-    return this.http.post<UserAuthResponse>(`${this.apiUrl}/login`, { username, password }).pipe(
+  login(username: string, password: string): Observable<UserAuthResponse> {
+    if (this.isLoggedIn()) {
+      const activeName = this.currentUser()?.username || 'current user';
+      return throwError(() => ({
+        status: 409,
+        error: { detail: `User "${activeName}" is already logged in. Please sign out first before logging in another user.` }
+      }));
+    }
+
+    return this.http.post<UserAuthResponse>(`${this.apiUrl}/login`, { username, password }, { headers: this.getAuthHeaders() }).pipe(
       tap(res => {
-        if (res && res.user) {
+        if (res && res.access_token && res.user) {
           this.setSession(res.access_token, res.user);
         }
-      }),
-      catchError(err => {
-        // Fallback local login
-        const cleanU = username.trim();
-        const fallbackUser: UserProfile = {
-          id: Date.now() % 1000000,
-          username: cleanU.toLowerCase(),
-          name: cleanU.charAt(0).toUpperCase() + cleanU.slice(1),
-          phone: cleanU.match(/^\d+$/) ? cleanU : '',
-          email: `${cleanU}@showcase.user`,
-          preferred_language: 'hi',
-          role: 'user',
-          created_at: new Date().toISOString()
-        };
-        const fallbackRes: UserAuthResponse = {
-          access_token: 'usr_local_' + Math.random().toString(36).substring(2),
-          token_type: 'bearer',
-          user: fallbackUser
-        };
-        this.setSession(fallbackRes.access_token, fallbackUser);
-        return of(fallbackRes);
       })
     );
   }
@@ -128,16 +142,10 @@ export class UserService {
         }
       }),
       catchError(() => {
-        const cur = this.currentUser() || {
-          id: 1,
-          username: 'user',
-          name: 'User',
-          phone: '',
-          email: '',
-          preferred_language: 'hi',
-          role: 'user',
-          created_at: new Date().toISOString()
-        };
+        const cur = this.currentUser();
+        if (!cur) {
+          return throwError(() => ({ status: 401, error: { detail: 'Please sign in first.' } }));
+        }
         const updated: UserProfile = {
           ...cur,
           name: data.name !== undefined ? data.name : cur.name,
@@ -154,22 +162,12 @@ export class UserService {
   setUserName(name: string): void {
     const clean = name.trim();
     if (!clean) return;
-    const cur = this.currentUser();
-    if (cur) {
+    if (this.isLoggedIn() && this.currentUser()) {
       this.updateProfile({ name: clean }).subscribe();
     } else {
-      // Auto-create local user profile
-      const newU: UserProfile = {
-        id: Date.now() % 1000000,
-        username: clean.toLowerCase().replace(/\s+/g, '_'),
-        name: clean,
-        phone: '',
-        email: '',
-        preferred_language: 'hi',
-        role: 'user',
-        created_at: new Date().toISOString()
-      };
-      this.setSession('usr_guest_' + Date.now(), newU);
+      // Save casual greeting name without logging in or creating a fake session
+      localStorage.setItem(this.guestNameKey, clean);
+      this.guestName.set(clean);
     }
   }
 

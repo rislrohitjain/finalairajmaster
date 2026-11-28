@@ -38,6 +38,23 @@
       </a>
     </div>
 
+    <!-- Developer Resume & Contact Card in Sidebar -->
+    <div class="p-3 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 border-b border-slate-700">
+      <a [href]="resumeUrl" target="_blank" rel="noopener noreferrer"
+         class="flex items-center justify-between p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-all group">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-sm shadow">
+            👨‍💻
+          </div>
+          <div>
+            <div class="text-[10px] font-bold uppercase tracking-wider text-amber-300">Rohit Jain • Resume & Contact</div>
+            <div class="text-xs font-semibold text-white">rohitjain-resume.vercel.app</div>
+          </div>
+        </div>
+        <span class="text-[11px] bg-white text-slate-900 font-extrabold px-2 py-0.5 rounded-full group-hover:scale-105 transition-transform">Open ↗</span>
+      </a>
+    </div>
+
     <!-- Jain Live Voice Agent Trigger in Sidebar -->
     <div class="p-3 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200">
       <button (click)="openVoiceAgent()" class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold text-xs shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer group">
@@ -142,22 +159,34 @@
       </div>
     </div>
 
-    <!-- Sidebar Footer / Admin Button -->
-    <div class="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-      <button (click)="clearChat()" class="text-xs text-slate-500 hover:text-slate-800 font-medium flex items-center space-x-1.5 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-        <span>Reset Chat</span>
-      </button>
+    <!-- Sidebar Footer / Admin Button & Developer Credit -->
+    <div class="p-3 border-t border-slate-200 bg-slate-50 space-y-2">
+      <div class="flex items-center justify-between">
+        <button (click)="clearChat()" class="text-xs text-slate-500 hover:text-slate-800 font-medium flex items-center space-x-1.5 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          <span>Reset Chat</span>
+        </button>
 
-      <a *ngIf="!auth.isLoggedIn()" routerLink="/admin/login" class="text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-lg flex items-center space-x-1 hover:bg-orange-100 transition-colors">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
-        <span>Admin Login</span>
-      </a>
+        <a *ngIf="!auth.isLoggedIn()" routerLink="/admin/login" class="text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-lg flex items-center space-x-1 hover:bg-orange-100 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+          <span>Admin Login</span>
+        </a>
 
-      <a *ngIf="auth.isLoggedIn()" routerLink="/admin/dashboard" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center space-x-1 hover:bg-emerald-100 transition-colors">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        <span>Dashboard</span>
-      </a>
+        <a *ngIf="auth.isLoggedIn()" routerLink="/admin/dashboard" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center space-x-1 hover:bg-emerald-100 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Dashboard</span>
+        </a>
+      </div>
+
+      <!-- Developer Info in Sidebar (Req 1) -->
+      <div class="pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+        <span class="font-medium">Lead AI Systems Engineer</span>
+        <a [href]="resumeUrl" target="_blank" rel="noopener noreferrer"
+           class="font-bold text-orange-600 hover:text-orange-700 hover:underline inline-flex items-center space-x-0.5">
+          <span>Rohit Jain</span>
+          <span class="text-[10px]">↗</span>
+        </a>
+      </div>
     </div>
   </aside>
 
@@ -185,6 +214,12 @@
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 <span>AI Showcase Active</span>
               </span>
+              <span *ngIf="mcpStatus?.status === 'online'"
+                    [title]="'MCP Server: ' + (mcpStatus?.server?.name || 'postgres-mcp') + ' (' + (mcpStatus?.transport || 'jsonrpc') + ')'"
+                    class="hidden md:inline-flex items-center space-x-1 text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 px-2.5 py-0.5 rounded-full shadow-2xs whitespace-nowrap shrink-0">
+                <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                <span>🔌 MCP Active</span>
+              </span>
             </div>
             <div class="text-[11px] text-slate-500">
               Welcome here chat with Jain's only
@@ -195,22 +230,31 @@
 
       <!-- Right Action Items -->
       <div class="flex items-center space-x-1 sm:space-x-2">
-        <!-- WhatsApp-Style Privacy Shield Button (Req 7) -->
-        <button type="button" (click)="toggleChatPrivacy()"
-                [class.bg-amber-100]="isChatHidden"
-                [class.border-amber-400]="isChatHidden"
-                [class.text-amber-900]="isChatHidden"
-                [class.bg-white]="!isChatHidden"
-                [class.text-slate-700]="!isChatHidden"
-                class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl border border-slate-300 hover:border-orange-300 text-xs font-bold transition-all shadow-2xs cursor-pointer group"
-                [title]="'Inactivity auto-hide timer: ' + formattedInactivityTime + ' (Click to ' + (isChatHidden ? 'reveal' : 'hide') + ' chat)'">
-          <span class="text-sm">🛡️</span>
-          <span class="hidden md:inline">{{ isChatHidden ? 'Show Chat' : 'Hide Chat' }}</span>
-          <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold"
-                [ngClass]="isChatHidden ? 'bg-amber-200 text-amber-950' : 'bg-slate-100 text-slate-600'">
-            {{ formattedInactivityTime }}
-          </span>
-        </button>
+        <!-- WhatsApp-Style Privacy Shield Button + Auto-Hide Selector (Req 7) -->
+        <div class="flex items-center rounded-xl border border-slate-300 bg-white shadow-2xs overflow-hidden">
+          <button type="button" (click)="toggleChatPrivacy()"
+                  [class.bg-amber-100]="isChatHidden"
+                  [class.text-amber-900]="isChatHidden"
+                  [class.bg-white]="!isChatHidden"
+                  [class.text-slate-700]="!isChatHidden"
+                  class="flex items-center space-x-1 px-2.5 py-1.5 hover:bg-orange-50 text-xs font-bold transition-all cursor-pointer"
+                  [title]="autoHideMinutes > 0 ? ('Auto-hides after ' + autoHideMinutes + ' min inactivity (' + formattedInactivityTime + ' left). Click to ' + (isChatHidden ? 'show' : 'hide') + ' chat now.') : ('Manual mode. Click to ' + (isChatHidden ? 'show' : 'hide') + ' chat.')">
+            <span class="text-sm">🛡️</span>
+            <span>{{ isChatHidden ? 'Show Chat' : 'Hide Chat' }}</span>
+            <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold"
+                  [ngClass]="isChatHidden ? 'bg-amber-200 text-amber-950' : 'bg-slate-100 text-slate-600'">
+              {{ formattedInactivityTime }}
+            </span>
+          </button>
+          <select [ngModel]="autoHideMinutes" (ngModelChange)="setAutoHideMinutes(+$event)"
+                  title="Choose auto-hide inactivity timer"
+                  class="bg-slate-50 border-l border-slate-200 text-[10px] font-bold text-slate-700 px-1.5 py-1.5 outline-none cursor-pointer hover:bg-slate-100">
+            <option [value]="2">2m</option>
+            <option [value]="1">1m</option>
+            <option [value]="5">5m</option>
+            <option [value]="0">Off</option>
+          </select>
+        </div>
 
         <!-- Language Selector Pills (EN / हिन्दी / Hinglish) -->
         <div class="flex items-center bg-white/80 p-0.5 rounded-xl border border-slate-300 shadow-2xs">
@@ -248,6 +292,15 @@
           <span class="sm:hidden">Voice</span>
           <span class="bg-white/25 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-wider">TALK</span>
         </button>
+
+        <!-- Developer Resume & Contact Website Link -->
+        <a [href]="resumeUrl" target="_blank" rel="noopener noreferrer"
+           title="Open Rohit Jain Resume & Contact Website"
+           class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-all shadow-2xs cursor-pointer group">
+          <span class="text-sm">👨‍💻</span>
+          <span class="hidden sm:inline">Resume</span>
+          <span class="text-[10px] text-amber-300">↗</span>
+        </a>
 
         <!-- Project Guide & Uses Modal Trigger Button -->
         <button type="button" (click)="openAboutModal()"
@@ -302,25 +355,35 @@
     <!-- Chat Message Section with WhatsApp-Style Privacy Shield Overlay (Req 7) -->
     <div class="relative flex-1 overflow-hidden flex flex-col">
       
-      <!-- Privacy Shield Frosted Overlay (When Inactive 2 min or User Clicks Hide Chat) -->
+      <!-- Privacy Shield Frosted Overlay (When Inactive or User Clicks Hide Chat) -->
       <div *ngIf="isChatHidden"
-           class="absolute inset-0 z-30 bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center text-white animate-fade-in">
+           (click)="revealChat()"
+           (mousemove)="onUserActivity()"
+           class="absolute inset-0 z-30 bg-slate-900/90 backdrop-blur-lg flex flex-col items-center justify-center p-6 text-center text-white animate-fade-in cursor-pointer">
         <div class="w-16 h-16 rounded-3xl bg-white/10 border border-white/20 flex items-center justify-center text-3xl mb-4 shadow-xl">
           🛡️
         </div>
-        <h3 class="font-extrabold text-base sm:text-lg text-white mb-1">WhatsApp-Style Privacy Shield Active</h3>
-        <p class="text-xs text-slate-300 max-w-md mb-5 leading-relaxed">
-          Chat messages are hidden after 2 minutes of inactivity to keep your conversation private from nearby onlookers. Only this chat section is obscured.
+        <h3 class="font-extrabold text-base sm:text-lg text-white mb-1">Chat Privacy Shield Active</h3>
+        <p class="text-xs text-slate-300 max-w-md mb-2 leading-relaxed">
+          {{ autoHideMinutes > 0
+             ? ('Chat messages are hidden automatically after ' + autoHideMinutes + ' minute(s) of inactivity.')
+             : 'Chat messages were hidden manually.' }}
+        </p>
+        <p class="text-xs text-amber-300 font-semibold mb-5 flex items-center space-x-1.5">
+          <span>⚡ Move mouse, click, or tap anywhere to instantly unhide & continue</span>
         </p>
         <button type="button" (click)="revealChat()"
                 class="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs shadow-lg transition-all flex items-center space-x-2 cursor-pointer hover:scale-105 active:scale-95">
           <span>👁️ Click to Reveal Chat Messages</span>
         </button>
-        <span class="text-[11px] text-slate-400 mt-3 font-mono">Timer reset on click</span>
+        <span class="text-[11px] text-slate-400 mt-3 font-mono">
+          {{ autoHideMinutes > 0 ? ('Auto-hide: ' + autoHideMinutes + ' min • Resets countdown on mouse move or click') : 'Manual hide mode' }}
+        </span>
       </div>
 
       <!-- Message Scroll Area -->
-      <div #scrollContainer class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div #scrollContainer [class.blur-md]="isChatHidden" [class.pointer-events-none]="isChatHidden" [class.select-none]="isChatHidden"
+           class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 transition-all duration-200">
       <div *ngFor="let msg of messages" class="flex flex-col" [class.items-end]="msg.sender === 'user'" [class.items-start]="msg.sender === 'assistant'">
         
         <!-- User Message Bubble -->
@@ -348,6 +411,19 @@
                       'bg-rose-100 text-rose-800': msg.intent === 'out_of_scope'
                     }">
                 {{ msg.intent.replace('_', ' ') }}
+              </span>
+              <span *ngIf="msg.mcpUsed"
+                    [title]="'Resolved via MCP JSON-RPC (' + (msg.mcpTransport || 'jsonrpc') + ')'"
+                    class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                🔌 MCP: {{ msg.mcpTool || 'postgres-mcp' }}
+              </span>
+              <span *ngIf="msg.resolutionStage === 'rag_retrieval'"
+                    class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                📚 RAG Fallback
+              </span>
+              <span *ngIf="msg.resolutionStage === 'web_search'"
+                    class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-200">
+                🌐 Live Web Search
               </span>
             </div>
 
@@ -385,9 +461,15 @@
                 </div>
               </div>
             </div>
-            <button type="button" (click)="openVoiceAgent()" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center space-x-1.5 shrink-0">
-              <span>🎙️ Open Live Voice</span>
-            </button>
+            <div class="flex items-center space-x-2 shrink-0">
+              <a [href]="resumeUrl" target="_blank" rel="noopener noreferrer"
+                 class="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 text-white font-bold text-xs transition-all flex items-center justify-center space-x-1.5 shrink-0">
+                <span>📄 Resume & Contact ↗</span>
+              </a>
+              <button type="button" (click)="openVoiceAgent()" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center space-x-1.5 shrink-0">
+                <span>🎙️ Open Live Voice</span>
+              </button>
+            </div>
           </div>
 
           <!-- Interactive Next Expected Questions (Clickable Action Chips) -->
@@ -481,6 +563,39 @@
         </button>
       </form>
     </div>
+
+    <!-- Footer Section with Developer & Engineer Details (Req 1) -->
+    <footer class="py-2.5 px-4 bg-white border-t border-slate-200 text-slate-500 shadow-2xs z-10 shrink-0">
+      <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs gap-2">
+        <!-- System Badge & Architecture -->
+        <div class="flex items-center space-x-2 text-[11px] sm:text-xs">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+            Full-Stack AI & LLM Systems Portfolio
+          </span>
+          <span class="hidden md:inline text-slate-400">•</span>
+          <span class="hidden md:inline text-slate-500 font-medium">LangGraph • Multi-Cloud LLMs • Python FastAPI • Angular 19</span>
+        </div>
+
+        <!-- Developer & Engineer Details -->
+        <div class="flex items-center space-x-2 text-[11px] sm:text-xs">
+          <span class="text-slate-500 font-medium">Engineered by</span>
+          <a [href]="resumeUrl" target="_blank" rel="noopener noreferrer"
+             class="font-bold text-orange-600 hover:text-orange-700 hover:underline inline-flex items-center space-x-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2.5 py-1 rounded-lg transition-all group shadow-2xs">
+            <span>👨‍💻</span>
+            <span>Rohit Jain</span>
+            <span class="text-[10px] bg-orange-200/70 text-orange-900 px-1 rounded font-semibold hidden sm:inline">Lead AI Engineer</span>
+            <svg class="w-3 h-3 text-orange-500 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+          <span class="text-slate-400">•</span>
+          <a [href]="resumeUrl" target="_blank" rel="noopener noreferrer"
+             class="font-semibold text-slate-600 hover:text-orange-600 hover:underline inline-flex items-center space-x-0.5">
+            <span>Portfolio & Resume</span>
+            <span>↗</span>
+          </a>
+        </div>
+      </div>
+    </footer>
   </main>
 
   <!-- 100+ Questions Modal Popup Dialog -->
@@ -646,6 +761,26 @@
             <div class="p-2.5 rounded-xl bg-amber-100/70 border border-amber-300 text-amber-950 text-xs font-semibold">
               ⚠️ <strong>Portfolio Disclaimer:</strong> This project is a simulated technical demonstration built for learning, research, and portfolio presentation. It is not affiliated with or endorsed by any government entity, and all administrative data is simulated for demonstration purposes.
             </div>
+            <div class="p-3.5 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div>
+                <div class="text-xs font-bold text-amber-300">👨‍💻 Connect with Rohit Jain (Developer Profile & Resume)</div>
+                <div class="text-[11px] text-slate-300">Explore full experience, AI/MCP projects, and direct communication links.</div>
+              </div>
+              <a [href]="resumeUrl" target="_blank" rel="noopener noreferrer"
+                 class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow transition-all text-center shrink-0">
+                Open Resume Website ↗
+              </a>
+            </div>
+            <div class="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div>
+                <div class="text-xs font-bold text-indigo-950">📘 Download Complete Full-Stack, LLM &amp; PostgreSQL Word Guide (.docx)</div>
+                <div class="text-[11px] text-indigo-700">Ready for NotebookLM Hindi learning (includes all 17 public + 41 archive DB tables, LangGraph, MCP &amp; Angular).</div>
+              </div>
+              <a href="RajMaster_AI_Complete_FullStack_LLM_Postgres_Guide.docx" download
+                 class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow transition-all text-center shrink-0">
+                Download .docx ⬇
+              </a>
+            </div>
           </div>
 
           <!-- Section 2: Key Capabilities & Uses -->
@@ -779,6 +914,26 @@
             </p>
             <div class="p-2.5 rounded-xl bg-amber-100/70 border border-amber-300 text-amber-950 text-xs font-semibold">
               ⚠️ <strong>पोर्टफोलियो सूचना:</strong> यह एक तकनीकी एवं शैक्षणिक डेमो प्रोजेक्ट है। यह किसी भी सरकारी विभाग या प्राधिकरण से संबद्ध नहीं है, और इसका उपयोग सीखने व तकनीकी प्रदर्शन के उद्देश्य से किया गया है।
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div>
+                <div class="text-xs font-bold text-amber-300">👨‍💻 रोहित जैन से जुड़ें (Developer Resume & Contact)</div>
+                <div class="text-[11px] text-slate-300">संपूर्ण अनुभव, AI/MCP प्रोजेक्ट्स और सीधे संपर्क हेतु वेबसाइट देखें।</div>
+              </div>
+              <a [href]="resumeUrl" target="_blank" rel="noopener noreferrer"
+                 class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow transition-all text-center shrink-0">
+                Resume Website खोलें ↗
+              </a>
+            </div>
+            <div class="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div>
+                <div class="text-xs font-bold text-indigo-950">📘 संपूर्ण Full-Stack, LLM एवं PostgreSQL Word गाइड (.docx) डाउनलोड करें</div>
+                <div class="text-[11px] text-indigo-700">NotebookLM में हिंदी में सीखने के लिए तैयार (सभी 17 public + 41 archive DB टेबल्स, LangGraph, MCP व Angular सहित)।</div>
+              </div>
+              <a href="RajMaster_AI_Complete_FullStack_LLM_Postgres_Guide.docx" download
+                 class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow transition-all text-center shrink-0">
+                Word फाइल डाउनलोड करें ⬇
+              </a>
             </div>
           </div>
 
@@ -948,39 +1103,51 @@
       <div class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 bg-slate-50">
 
         <!-- Visual Flow Diagram Bar -->
-        <div class="p-4 rounded-2xl bg-white border border-emerald-200 shadow-sm">
-          <div class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider mb-3 flex items-center space-x-1.5">
-            <span>⚡ Interactive Flowchart Pipeline</span>
+        <div class="p-4 rounded-2xl bg-white border border-emerald-200 shadow-sm space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider flex items-center space-x-1.5">
+              <span>⚡ Interactive Flowchart Pipeline</span>
+            </div>
+            <div *ngIf="mcpStatus" class="text-[10px] font-bold px-2.5 py-0.5 rounded-full border"
+                 [ngClass]="mcpStatus.status === 'online' ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 'bg-slate-100 text-slate-600 border-slate-200'">
+              🔌 MCP: {{ mcpStatus.status === 'online' ? 'ONLINE' : 'STANDBY' }} ({{ mcpStatus.transport || 'jsonrpc' }} • {{ mcpStatus.tools_count || 5 }} tools)
+            </div>
           </div>
           <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-center">
-            <div class="flex-1 min-w-[120px] p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 shadow-2xs">
+            <div class="flex-1 min-w-[105px] p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 shadow-2xs">
               <div class="text-lg mb-1">📱 1</div>
               <div>User Query</div>
               <div class="text-[10px] font-normal text-emerald-600">Text / Question</div>
             </div>
             <span class="text-emerald-400 font-black text-base">➔</span>
-            <div class="flex-1 min-w-[120px] p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 shadow-2xs">
+            <div class="flex-1 min-w-[105px] p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 shadow-2xs">
               <div class="text-lg mb-1">🛡️ 2</div>
               <div>Guardrail Node</div>
               <div class="text-[10px] font-normal text-blue-600">Intent & Safety</div>
             </div>
             <span class="text-emerald-400 font-black text-base">➔</span>
-            <div class="flex-1 min-w-[120px] p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 shadow-2xs">
+            <div class="flex-1 min-w-[115px] p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 shadow-2xs">
               <div class="text-lg mb-1">⚡ 3</div>
-              <div>LangGraph Core</div>
-              <div class="text-[10px] font-normal text-amber-600">6-Tier PostgreSQL</div>
+              <div>LangGraph + MCP</div>
+              <div class="text-[10px] font-normal text-amber-700">6-Tier PG & MCP Server</div>
             </div>
             <span class="text-emerald-400 font-black text-base">➔</span>
-            <div class="flex-1 min-w-[120px] p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 shadow-2xs">
-              <div class="text-lg mb-1">🤖 4</div>
+            <div class="flex-1 min-w-[115px] p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 shadow-2xs">
+              <div class="text-lg mb-1">🔎 4</div>
+              <div>RAG / Web Search</div>
+              <div class="text-[10px] font-normal text-sky-700">If Not Found Fallback</div>
+            </div>
+            <span class="text-emerald-400 font-black text-base">➔</span>
+            <div class="flex-1 min-w-[105px] p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 shadow-2xs">
+              <div class="text-lg mb-1">🤖 5</div>
               <div>Cloud LLM</div>
               <div class="text-[10px] font-normal text-purple-600">Gemini / Groq / Llama</div>
             </div>
             <span class="text-emerald-400 font-black text-base">➔</span>
-            <div class="flex-1 min-w-[120px] p-2.5 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-900 shadow-2xs">
-              <div class="text-lg mb-1">💬 5</div>
+            <div class="flex-1 min-w-[105px] p-2.5 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-900 shadow-2xs">
+              <div class="text-lg mb-1">💬 6</div>
               <div>Final Output</div>
-              <div class="text-[10px] font-normal text-cyan-600">Lineage & Contacts</div>
+              <div class="text-[10px] font-normal text-cyan-600">Lineage, MCP & Contacts</div>
             </div>
           </div>
         </div>
@@ -993,7 +1160,7 @@
               <span>Step 1: User Text Input & Language Detection 📱</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              The citizen or revenue officer types an administrative question in <strong>English</strong>, <strong>Hindi</strong>, or <strong>Hinglish</strong> (e.g., <em>"What is the division of Balotra?"</em> or <em>"Details of pincode 302029"</em>). The frontend captures this and dispatches a JSON POST payload to <code>/api/chat</code>.
+              The citizen or revenue officer types an administrative question in <strong>English</strong>, <strong>Hindi</strong>, or <strong>Hinglish</strong> (e.g., <em>"What is the division of Balotra?"</em> or <em>"Show database stats via MCP"</em>). The frontend captures this and dispatches a JSON POST payload to <code>/api/chat/stream</code>.
             </p>
           </div>
 
@@ -1003,10 +1170,10 @@
               <span>Step 2: Guardrail Classifier & Intent Parsing 🛡️</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              Before running expensive database or AI queries, the <code>guardrail_classifier_node</code> evaluates the query:
+              Before running database or AI queries, the <code>guardrail_classifier_node</code> evaluates the query:
             </p>
             <ul class="text-xs text-slate-600 space-y-1 list-disc list-inside">
-              <li><strong>Geographic Query:</strong> Contains district, tehsil, village, or 6-digit postal pincode ➔ Routes to Database.</li>
+              <li><strong>Geographic / MCP Query:</strong> Contains district, tehsil, village, 6-digit pincode, or MCP database inspection ➔ Routes to LangGraph + MCP.</li>
               <li><strong>Capability Query:</strong> Asks for help, overview, or 6 tiers ➔ Routes to Capability Node.</li>
               <li><strong>Out of Scope:</strong> Non-Rajasthan general queries ➔ Routed to official scope notice with citizen helpline <strong>89988555525</strong>.</li>
             </ul>
@@ -1015,10 +1182,10 @@
           <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
             <h3 class="font-bold text-slate-900 text-sm flex items-center space-x-2">
               <span class="w-6 h-6 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-xs">3</span>
-              <span>Step 3: LangGraph 6-Tier Administrative Lookup ⚡</span>
+              <span>Step 3: LangGraph 6-Tier PostgreSQL + MCP Server (JSON-RPC 2.0) ⚡</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              The agent performs high-precision multi-tier fuzzy & exact matching across:
+              The agent performs high-precision matching across PostgreSQL AND invokes the local/live <code>finalairajmaster-postgres-mcp</code> server over JSON-RPC 2.0 (<code>stdio-jsonrpc</code> locally / <code>inprocess-jsonrpc</code> fallback in serverless) using 5 MCP tools: <code>get_administrative_lineage</code>, <code>get_database_stats</code>, <code>list_tables</code>, <code>describe_table</code>, and <code>read_query</code>.
             </p>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-semibold text-slate-700">
               <div class="p-2 bg-slate-50 rounded-lg border border-slate-200">1. State: Rajasthan</div>
@@ -1035,23 +1202,39 @@
 
           <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
             <h3 class="font-bold text-slate-900 text-sm flex items-center space-x-2">
-              <span class="w-6 h-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center text-xs">4</span>
-              <span>Step 4: Cloud LLM Grounding & Zero-Hallucination Synthesis 🤖</span>
+              <span class="w-6 h-6 rounded-full bg-sky-100 text-sky-800 flex items-center justify-center text-xs">4</span>
+              <span>Step 4: If Not Found — RAG & Live Web Search Fallback 🔎</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              When a Cloud LLM API is configured (Google Gemini, Groq, Hugging Face, or OpenAI), the agent passes the <strong>verified official database record</strong> directly into the LLM system prompt. The LLM formulates a polite, natural sentence strictly based on the verified data, ensuring <strong>100% zero hallucination</strong>.
+              If direct 6-tier PostgreSQL & MCP lookup finds no match, <code>synthesizer_node</code> automatically triggers a multi-stage fallback:
+            </p>
+            <ul class="text-xs text-slate-600 space-y-1 list-disc list-inside">
+              <li><strong>Database RAG Retrieval:</strong> Fuzzy SQL search across <code>raj_masters.pincodes</code>, <code>tehsils</code>, <code>blocks</code>, and <code>districts</code>.</li>
+              <li><strong>Live Web Search:</strong> Real-time lookup via DuckDuckGo / Tavily / SerpAPI / Wikipedia if RAG also misses.</li>
+              <li><strong>Helpline Notice:</strong> Clean fallback notice with citizen support helpline if still unmatched.</li>
+            </ul>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+            <h3 class="font-bold text-slate-900 text-sm flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center text-xs">5</span>
+              <span>Step 5: Cloud LLM Grounding & Zero-Hallucination Synthesis 🤖</span>
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Verified records from PostgreSQL/MCP and RAG are synthesized deterministically (or via Cloud LLM APIs: Google Gemini, Groq, Hugging Face, OpenAI, or local Ollama) strictly grounded in official data, ensuring <strong>zero hallucination</strong>.
             </p>
           </div>
 
           <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
             <h3 class="font-bold text-slate-900 text-sm flex items-center space-x-2">
-              <span class="w-6 h-6 rounded-full bg-cyan-100 text-cyan-800 flex items-center justify-center text-xs">5</span>
-              <span>Step 5: Final Output & Interactive Next Questions 💬</span>
+              <span class="w-6 h-6 rounded-full bg-cyan-100 text-cyan-800 flex items-center justify-center text-xs">6</span>
+              <span>Step 6: Final Output, MCP Badges & Next Questions 💬</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
               The user receives:
             </p>
             <div class="p-3 bg-slate-50 rounded-xl text-xs font-mono text-slate-700 border border-slate-200 space-y-1">
+              <div>🔌 MCP Execution Badge: MCP: get_administrative_lineage (stdio-jsonrpc)</div>
               <div>📍 Breadcrumbs: ['Rajasthan', 'Jodhpur Division', 'Balotra']</div>
               <div>🏛️ Governance Authorities: District Collectorate, Zila Pramukh, Tehsildar</div>
               <div>💡 Clickable Next Expected Questions: "Who is the Tehsildar?", "What pincode covers this area?"</div>
@@ -1067,7 +1250,7 @@
               <span>चरण 1: उपयोगकर्ता का प्रश्न व भाषा पहचान 📱</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              नागरिक या राजस्व अधिकारी हिंदी या अंग्रेजी में प्रश्न पूछता है (जैसे: <em>"बालोतरा किस संभाग में है?"</em> या <em>"मुहाना गांव की प्रशासनिक वंशावली बताएं"</em>)। सिस्टम तुरंत भाषा की पहचान करके बैकएंड को भेजता है।
+              नागरिक या राजस्व अधिकारी हिंदी या अंग्रेजी में प्रश्न पूछता है (जैसे: <em>"बालोतरा किस संभाग में है?"</em> या <em>"Show database stats via MCP"</em>)। सिस्टम तुरंत भाषा की पहचान करके बैकएंड को भेजता है।
             </p>
           </div>
 
@@ -1080,7 +1263,7 @@
               गार्डरेल नोड प्रश्न की जांच करता है:
             </p>
             <ul class="text-xs text-slate-600 space-y-1 list-disc list-inside">
-              <li><strong>प्रशासनिक प्रश्न:</strong> जिला, तहसील, संभाग, गांव या पिनकोड ➔ सीधे डेटाबेस में खोज।</li>
+              <li><strong>प्रशासनिक / MCP प्रश्न:</strong> जिला, तहसील, संभाग, गांव, पिनकोड या MCP डेटाबेस जांच ➔ LangGraph + MCP में खोज।</li>
               <li><strong>पोर्टल जानकारी:</strong> 6-स्तरीय व्यवस्था व कार्यप्रणाली ➔ क्षमता नोड।</li>
               <li><strong>असंबंधित प्रश्न:</strong> राजस्थान से बाहर के प्रश्न ➔ आधिकारिक नागरिक हेल्पलाइन <strong>89988555525</strong> पर मार्गदर्शन।</li>
             </ul>
@@ -1089,29 +1272,40 @@
           <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
             <h3 class="font-bold text-slate-900 text-sm flex items-center space-x-2">
               <span class="w-6 h-6 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-xs">3</span>
-              <span>चरण 3: LangGraph 6-स्तरीय प्रशासनिक खोज व सत्यापन ⚡</span>
+              <span>चरण 3: LangGraph 6-स्तरीय PostgreSQL व MCP सर्वर खोज ⚡</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              सिस्टम राजस्थान सरकार के 10 संभागों, 50 जिलों, 400+ तहसीलों और सभी पिनकोडों में मिलान करता है। यदि क्लाउड डेटाबेस में कोई रुकावट आए, तो इन-मेमोरी डायरेक्टरी 50 मिलीसेकंड में सटीक उत्तर सुनिश्चित करती है।
+              सिस्टम 10 संभागों, 50 जिलों, तहसीलों व पिनकोडों में खोज के साथ <code>finalairajmaster-postgres-mcp</code> (JSON-RPC 2.0) के 5 MCP टूल्स (<code>get_administrative_lineage</code>, <code>get_database_stats</code>, <code>list_tables</code>, <code>describe_table</code>, <code>read_query</code>) का उपयोग करता है।
             </p>
           </div>
 
           <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
             <h3 class="font-bold text-slate-900 text-sm flex items-center space-x-2">
-              <span class="w-6 h-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center text-xs">4</span>
-              <span>चरण 4: क्लाउड LLM व शून्य-भ्रम (Zero Hallucination) उत्तर निर्माण 🤖</span>
+              <span class="w-6 h-6 rounded-full bg-sky-100 text-sky-800 flex items-center justify-center text-xs">4</span>
+              <span>चरण 4: जानकारी न मिलने पर RAG व लाइव वेब सर्च फॉलबैक 🔎</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              सत्यापित सरकारी रिकॉर्ड को AI मॉडल (Gemini / Groq / Llama) को संदर्भ के रूप में दिया जाता है, जिससे AI कभी भी कोई गलत अधिकारी या गलत जिला नहीं बताता और शत-प्रतिशत प्रामाणिक सरकारी उत्तर तैयार होता है।
+              यदि मुख्य PostgreSQL व MCP तालिकाओं में उत्तर न मिले, तो सिस्टम स्वतः <strong>RAG डेटाबेस खोज</strong> और फिर <strong>लाइव वेब सर्च</strong> (DuckDuckGo / Tavily / SerpAPI / Wikipedia) से सत्यापित जानकारी खोजता है।
             </p>
           </div>
 
           <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
             <h3 class="font-bold text-slate-900 text-sm flex items-center space-x-2">
-              <span class="w-6 h-6 rounded-full bg-cyan-100 text-cyan-800 flex items-center justify-center text-xs">5</span>
-              <span>चरण 5: अंतिम हिंदी उत्तर व अगले संभावित प्रश्न 💬</span>
+              <span class="w-6 h-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center text-xs">5</span>
+              <span>चरण 5: क्लाउड LLM व शून्य-भ्रम (Zero Hallucination) उत्तर निर्माण 🤖</span>
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              सत्यापित रिकॉर्ड (PostgreSQL, MCP या RAG) के आधार पर शत-प्रतिशत प्रामाणिक और सटीक उत्तर तैयार किया जाता है।
+            </p>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+            <h3 class="font-bold text-slate-900 text-sm flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-full bg-cyan-100 text-cyan-800 flex items-center justify-center text-xs">6</span>
+              <span>चरण 6: अंतिम हिंदी उत्तर, MCP बैज व अगले प्रश्न 💬</span>
             </h3>
             <div class="p-3 bg-slate-50 rounded-xl text-xs font-mono text-slate-700 border border-slate-200 space-y-1">
+              <div>🔌 MCP बैज: MCP: get_administrative_lineage (stdio-jsonrpc)</div>
               <div>📍 प्रशासनिक पदानुक्रम: राजस्थान ➔ जोधपुर संभाग ➔ बालोतरा जिला</div>
               <div>🏛️ अधिकृत प्रशासन: जिला कलेक्टर कार्यालय, जिला परिषद बालोतरा</div>
               <div>💡 अगले संभावित प्रश्न: "तहसीलदार कौन हैं?", "पिनकोड 344022 के क्षेत्र"</div>
@@ -1404,9 +1598,9 @@
                    class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
           </div>
           <div class="space-y-1">
-            <label class="text-[11px] font-bold text-slate-700 uppercase">Password (Optional)</label>
-            <input type="password" [(ngModel)]="userLoginForm.password" name="login_password"
-                   placeholder="Enter password (or leave empty for quick sign in)"
+            <label class="text-[11px] font-bold text-slate-700 uppercase">Password *</label>
+            <input type="password" [(ngModel)]="userLoginForm.password" name="login_password" required
+                   placeholder="Enter your account password"
                    class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
           </div>
           <button type="submit" [disabled]="isUserAuthLoading"
@@ -1446,8 +1640,8 @@
             </div>
           </div>
           <div class="space-y-1">
-            <label class="text-[11px] font-bold text-slate-700 uppercase">Password</label>
-            <input type="password" [(ngModel)]="userRegisterForm.password" name="reg_pwd"
+            <label class="text-[11px] font-bold text-slate-700 uppercase">Password *</label>
+            <input type="password" [(ngModel)]="userRegisterForm.password" name="reg_pwd" required minlength="4"
                    placeholder="Create a password (minimum 4 characters)"
                    class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs outline-none focus:border-orange-500">
           </div>
@@ -1460,6 +1654,9 @@
 
       <!-- Tab Content: Profile View / Edit -->
       <div *ngIf="userService.isLoggedIn()" class="p-6 space-y-4">
+        <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-900">
+          Active session: <strong>{{ userService.currentUser()?.username }}</strong>. Sign out first before logging in as another user.
+        </div>
         <form (ngSubmit)="onUpdateUserProfile()" (submit)="$event.preventDefault()" class="space-y-3">
           <div class="space-y-1">
             <label class="text-[11px] font-bold text-slate-700 uppercase">Full Name</label>
@@ -1490,11 +1687,11 @@
 
           <div class="flex items-center justify-between pt-2">
             <button type="button" (click)="onUserLogout()"
-                    class="px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all">
+                    class="px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all cursor-pointer">
               Sign Out
             </button>
             <button type="submit" [disabled]="isUserAuthLoading"
-                    class="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow transition-all disabled:opacity-50">
+                    class="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow transition-all disabled:opacity-50 cursor-pointer">
               {{ isUserAuthLoading ? 'Saving...' : 'Save Profile Changes' }}
             </button>
           </div>

@@ -17,6 +17,10 @@ export interface ChatMessage {
   isStreaming?: boolean;
   viewMode?: 'preview' | 'raw';
   copied?: boolean;
+  mcpUsed?: boolean;
+  mcpTool?: string;
+  mcpTransport?: string;
+  resolutionStage?: string;
 }
 
 export interface CapabilityData {
@@ -55,6 +59,10 @@ export class ChatService {
 
   getCapabilities(): Observable<CapabilityData> {
     return this.http.get<CapabilityData>(`${this.apiUrl}/capabilities`);
+  }
+
+  getMcpStatus(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/mcp/status`);
   }
 
   getExampleQuestions(category?: string): Observable<ExampleQuestionsResponse> {
