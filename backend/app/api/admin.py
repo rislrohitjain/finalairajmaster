@@ -3,9 +3,12 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import httpx
+import io
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, desc, update, cast, Text
+from app.export_utils import build_admin_excel
 from app.db.session import AsyncSessionLocal
 from app.db.models import (
     Admin, LLMSetting, ScraperRun, ChatLog,
@@ -624,7 +627,14 @@ async def _fetch_geo_records(level: str, search: Optional[str], limit: int, offs
         elif level == "tehsil_block":
             query = select(TehsilBlock, District.name_en.label("dist_name")).outerjoin(District, TehsilBlock.district_id == District.id).order_by(TehsilBlock.id)
             if search:
-                query = query.where(TehsilBlock.name_en.ilike(f"%{search}%") | TehsilBlock.name_hi.ilike(f"%{search}%") | TehsilBlock.code.ilike(f"%{search}%"))
+                sterm = f"%{search}%"
+                query = query.where(
+                    TehsilBlock.name_en.ilike(sterm)
+                    | TehsilBlock.name_hi.ilike(sterm)
+                    | TehsilBlock.code.ilike(sterm)
+                    | District.name_en.ilike(sterm)
+                    | cast(TehsilBlock.lgd_code, Text).ilike(sterm)
+                )
             count_q = select(func.count()).select_from(query.subquery())
             total = (await session.execute(count_q)).scalar_one()
             res = (await session.execute(query.offset(offset).limit(limit))).all()
@@ -646,7 +656,14 @@ async def _fetch_geo_records(level: str, search: Optional[str], limit: int, offs
             query = select(GramPanchayat, District.name_en.label("dist_name"), TehsilBlock.name_en.label("tb_name")).outerjoin(District, GramPanchayat.district_id == District.id).outerjoin(TehsilBlock, GramPanchayat.tehsil_block_id == TehsilBlock.id).order_by(GramPanchayat.id)
             if search:
                 sterm = f"%{search}%"
-                query = query.where(GramPanchayat.name_en.ilike(sterm) | GramPanchayat.name_hi.ilike(sterm) | GramPanchayat.code.ilike(sterm) | District.name_en.ilike(sterm) | TehsilBlock.name_en.ilike(sterm))
+                query = query.where(
+                    GramPanchayat.name_en.ilike(sterm)
+                    | GramPanchayat.name_hi.ilike(sterm)
+                    | GramPanchayat.code.ilike(sterm)
+                    | cast(GramPanchayat.lgd_code, Text).ilike(sterm)
+                    | District.name_en.ilike(sterm)
+                    | TehsilBlock.name_en.ilike(sterm)
+                )
             count_q = select(func.count()).select_from(query.subquery())
             total = (await session.execute(count_q)).scalar_one()
             res = (await session.execute(query.offset(offset).limit(limit))).all()
@@ -984,4 +1001,104 @@ async def delete_geo_record(
             "status": "success",
             "message": f"Successfully deleted {level} record #{record_id}"
         }
+
+
+# 6. Styled Excel Report Export (All Tabs + Charts + Summary)
+@router.get("/export-excel")
+async def export_admin_excel(
+    tab: str = Query(default="all", description="all | llm | scraper | database | logs"),
+    level: str = Query(default="district"),
+    search: Optional[str] = Query(default=None),
+    intent: Optional[str] = Query(default=None),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    tab_norm = (tab or "all").lower().strip()
+    if tab_norm not in ("all", "llm", "scraper", "database", "logs"):
+        raise HTTPException(status_code=400, detail=f"Invalid export tab '{tab}'")
+
+    payload: Dict[str, Any] = {
+        "geo_level": level,
+        "geo_records": [],
+        "geo_total": 0,
+        "pincode_localities_count": 53967,
+        "div_dist_summary": [],
+    }
+
+    # Gather stats & summaries for Executive Summary / Database exports
+    if tab_norm in ("all", "database"):
+        payload["stats"] = await get_geo_stats(current_admin=current_admin)
+        try:
+            async with AsyncSessionLocal() as session:
+                loc_cnt = (await session.execute(text("SELECT COUNT(*) FROM raj_masters.pincode_localities"))).scalar()
+                if loc_cnt is not None:
+                    payload["pincode_localities_count"] = int(loc_cnt)
+
+                dist_q = (
+                    select(
+                        District.name_en,
+                        func.count(func.distinct(Village.id)).label("villages"),
+                        func.count(func.distinct(GramPanchayat.id)).label("gps"),
+                    )
+                    .outerjoin(Village, Village.district_id == District.id)
+                    .outerjoin(GramPanchayat, GramPanchayat.district_id == District.id)
+                    .group_by(District.id, District.name_en)
+                    .order_by(desc("villages"))
+                    .limit(12)
+                )
+                dist_rows = (await session.execute(dist_q)).all()
+                payload["div_dist_summary"] = [
+                    {"district": r[0], "villages": int(r[1] or 0), "gps": int(r[2] or 0)}
+                    for r in dist_rows
+                ]
+        except Exception as e:
+            logger.warning(f"Optional summary query skipped during export: {e}")
+
+        rec_limit = 5000 if tab_norm == "database" else 500
+        try:
+            rec_data = await _fetch_geo_records(level=level.lower().strip(), search=search, limit=rec_limit, offset=0)
+            payload["geo_records"] = rec_data.get("records") or []
+            payload["geo_total"] = rec_data.get("total", len(payload["geo_records"]))
+        except Exception as e:
+            logger.warning(f"Geo records fetch error during export: {e}")
+
+    if tab_norm in ("all", "llm"):
+        payload["llm_config"] = await get_llm_config(current_admin=current_admin)
+
+    if tab_norm in ("all", "scraper"):
+        payload["scraper_runs"] = await get_scraper_runs(limit=100, current_admin=current_admin)
+
+    if tab_norm in ("all", "logs"):
+        try:
+            async with AsyncSessionLocal() as session:
+                l_q = select(ChatLog).order_by(desc(ChatLog.id)).limit(500)
+                if intent:
+                    l_q = l_q.where(ChatLog.detected_intent == intent)
+                if search and tab_norm == "logs":
+                    l_q = l_q.where(ChatLog.user_query.ilike(f"%{search}%"))
+                rows = (await session.execute(l_q)).scalars().all()
+                payload["chat_logs"] = [
+                    {
+                        "id": l.id,
+                        "session_id": l.session_id,
+                        "user_query": l.user_query,
+                        "detected_intent": l.detected_intent,
+                        "ai_response": l.ai_response,
+                        "latency_ms": l.latency_ms,
+                        "created_at": l.created_at.isoformat() if l.created_at else None,
+                    }
+                    for l in rows
+                ]
+        except Exception as e:
+            logger.warning(f"Chat logs fetch error during export: {e}")
+            payload["chat_logs"] = []
+
+    xlsx_bytes = build_admin_excel(tab_norm, payload)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = f"rajmaster_admin_{tab_norm}_{ts}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
 

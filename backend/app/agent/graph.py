@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import asyncio
 import logging
 from typing import Dict, Any, TypedDict, Optional, List
 from urllib.parse import quote_plus, unquote
@@ -11,7 +12,8 @@ from sqlalchemy import select, text
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from app.db.models import LLMSetting
-from app.agent.tools import lookup_geographic_hierarchy
+from app.agent.tools import lookup_geographic_hierarchy, STOP_WORDS
+from app.mcp.client import mcp_client
 
 logger = logging.getLogger("agent.graph")
 
@@ -27,6 +29,10 @@ class AgentState(TypedDict):
     response_text: str
     streaming_tokens: Optional[List[str]]
     next_questions: Optional[List[str]]
+    mcp_used: Optional[bool]
+    mcp_tool: Optional[str]
+    mcp_transport: Optional[str]
+    resolution_stage: Optional[str]
 
 # Rajasthan Administrative keywords for classifier
 GEO_KEYWORDS = {
@@ -146,6 +152,11 @@ async def guardrail_classifier_node(state: AgentState) -> AgentState:
     query = state["user_query"].strip()
     query_lower = query.lower()
     tokens = set(re.findall(r"\b\w+\b", query_lower))
+
+    # Check if MCP metadata / database inspection query
+    if _detect_mcp_metadata_intent(query):
+        state["intent"] = "geographic_query"
+        return state
 
     # Check if explicitly related to Rajasthan or official administration
     is_rajasthan_related = (
@@ -518,11 +529,35 @@ def format_natural_language_lineage(
                 f"जो प्रशासनिक रूप से {translate_crumb(div, 'hi')} के अधिकार क्षेत्र में आता है। "
                 f"जिले का संपूर्ण प्रशासनिक एवं विकास संचालन इसके स्वतंत्र जिला कलेक्टर कार्यालय एवं जिला परिषद के माध्यम से होता है।"
             )
-        elif "tehsil" in etype or "block" in etype:
-            sd_txt = f" यह {sub_div} उपखंड क्षेत्राधिकार के तहत कार्य करती है तथा" if sub_div else " यह"
+        elif "gram panchayat" in etype or "grampanchayat" in etype:
+            gp_hi = details.get("gram_panchayat_hindi") or lineage.get("gram_panchayat_hi")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            v_cnt = details.get("villages_count") or 0
+            v_list = details.get("villages") or []
+            pins = details.get("pincodes") or []
+            gp_disp = f"{entity_name} ({gp_hi})" if gp_hi else entity_name
+            lgd_txt = f" [LGD कोड: {lgd}]" if lgd else ""
+            blk_txt = f" यह {tehsil} पंचायत समिति (ब्लॉक) के अंतर्गत आती है।" if tehsil else ""
+            v_txt = f"\n\n🏡 सम्मिलित राजस्व गांव ({v_cnt}): {', '.join(v_list[:12])}" if v_list else ""
+            pin_txt = f"\n📮 संबंधित पिनकोड: {', '.join(pins)}" if pins else ""
             narrative = (
-                f"{entity_name} राजस्थान की एक महत्वपूर्ण प्रशासनिक इकाई है, जो {translate_crumb(div, 'hi')} के अंतर्गत {dist} जिले में स्थित है।{sd_txt} "
-                f"अपने अधीन आने वाली ग्राम पंचायतों एवं राजस्व गांवों के प्रशासनिक व राजस्व प्रबंधन का संचालन करती है।"
+                f"{gp_disp}{lgd_txt} राजस्थान की एक आधिकारिक ग्राम पंचायत है, "
+                f"जो {translate_crumb(div, 'hi')} के अंतर्गत {dist} जिले में स्थित है।{blk_txt}{v_txt}{pin_txt}"
+            )
+        elif "tehsil" in etype or "block" in etype:
+            tb_hi = details.get("entity_hindi")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            gp_cnt = details.get("gram_panchayats_count") or 0
+            v_cnt = details.get("villages_count") or 0
+            gps_sample = details.get("gram_panchayats") or []
+            tb_disp = f"{entity_name} ({tb_hi})" if tb_hi else entity_name
+            lgd_txt = f" [LGD कोड: {lgd}]" if lgd else ""
+            sd_txt = f" यह {sub_div} उपखंड क्षेत्राधिकार के तहत कार्य करती है तथा" if sub_div else " यह"
+            cnt_txt = f" इसके अंतर्गत {gp_cnt} ग्राम पंचायतें एवं {v_cnt} राजस्व गांव आते हैं।" if (gp_cnt or v_cnt) else ""
+            gp_list_txt = f"\n\n🏘️ प्रमुख ग्राम पंचायतें: {', '.join(gps_sample[:10])}" if gps_sample else ""
+            narrative = (
+                f"{tb_disp}{lgd_txt} राजस्थान की एक महत्वपूर्ण प्रशासनिक इकाई ({entity_type}) है, जो {translate_crumb(div, 'hi')} के अंतर्गत {dist} जिले में स्थित है।{sd_txt} "
+                f"अपने अधीन आने वाली ग्राम पंचायतों एवं राजस्व गांवों के प्रशासनिक व विकास कार्यों का संचालन करती है।{cnt_txt}{gp_list_txt}"
             )
         elif "urban" in etype or "nigam" in etype or "palika" in etype:
             narrative = (
@@ -654,11 +689,34 @@ def format_natural_language_lineage(
                 f"{count_intro}{entity_name} Rajasthan ka ek pramukh District hai, jo {div} ke administrative jurisdiction mein aata hai. "
                 f"Is district ka poora administration aur revenue management apne independent District Collectorate aur Zila Parishad ke tahat kaam karta hai."
             )
-        elif "tehsil" in etype or "block" in etype:
-            sd_txt = f" Yeh {sub_div} sub-divisional jurisdiction ke tahat operate karti hai aur" if sub_div else " Yeh"
+        elif "gram panchayat" in etype or "grampanchayat" in etype:
+            gp_hi = details.get("gram_panchayat_hindi") or lineage.get("gram_panchayat_hi")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            v_cnt = details.get("villages_count") or 0
+            v_list = details.get("villages") or []
+            pins = details.get("pincodes") or []
+            gp_disp = f"{entity_name} ({gp_hi})" if gp_hi else entity_name
+            lgd_txt = f" [LGD Code: {lgd}]" if lgd else ""
+            blk_txt = f" Yeh {tehsil} Block / Panchayat Samiti ke under aati hai." if tehsil else ""
+            v_txt = f"\n\n🏡 Covered Revenue Villages ({v_cnt}): {', '.join(v_list[:12])}" if v_list else ""
+            pin_txt = f"\n📮 Postal Pincodes: {', '.join(pins)}" if pins else ""
             narrative = (
-                f"{entity_name} Rajasthan ki ek important administrative unit hai, jo {div} ke {dist} district mein aati hai.{sd_txt} "
-                f"apne under aane wale gram panchayats aur villages ke revenue aur administrative kaamo ko manage karti hai."
+                f"{gp_disp}{lgd_txt} Rajasthan ki ek official Gram Panchayat hai, jo {div} ke {dist} district mein sthit hai.{blk_txt}{v_txt}{pin_txt}"
+            )
+        elif "tehsil" in etype or "block" in etype:
+            tb_hi = details.get("entity_hindi")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            gp_cnt = details.get("gram_panchayats_count") or 0
+            v_cnt = details.get("villages_count") or 0
+            gps_sample = details.get("gram_panchayats") or []
+            tb_disp = f"{entity_name} ({tb_hi})" if tb_hi else entity_name
+            lgd_txt = f" [LGD Code: {lgd}]" if lgd else ""
+            sd_txt = f" Yeh {sub_div} sub-divisional jurisdiction ke tahat operate karti hai aur" if sub_div else " Yeh"
+            cnt_txt = f" Iske under {gp_cnt} Gram Panchayats aur {v_cnt} Revenue Villages aate hain." if (gp_cnt or v_cnt) else ""
+            gp_list_txt = f"\n\n🏘️ Key Gram Panchayats: {', '.join(gps_sample[:10])}" if gps_sample else ""
+            narrative = (
+                f"{tb_disp}{lgd_txt} Rajasthan ki ek important {entity_type} unit hai, jo {div} ke {dist} district mein aati hai.{sd_txt} "
+                f"apne under aane wale gram panchayats aur villages ke revenue aur developmental kaamo ko manage karti hai.{cnt_txt}{gp_list_txt}"
             )
         elif "urban" in etype or "nigam" in etype or "palika" in etype:
             narrative = (
@@ -790,11 +848,34 @@ def format_natural_language_lineage(
                 f"functioning under the administrative jurisdiction of the {div}. "
                 f"The district operates with independent administrative and revenue machinery, coordinated through its dedicated Collectorate and Zila Parishad."
             )
-        elif "tehsil" in etype or "block" in etype:
-            sd_txt = f" It operates under the {sub_div} sub-divisional jurisdiction and" if sub_div else " It"
+        elif "gram panchayat" in etype or "grampanchayat" in etype:
+            gp_hi = details.get("gram_panchayat_hindi") or lineage.get("gram_panchayat_hi")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            v_cnt = details.get("villages_count") or 0
+            v_list = details.get("villages") or []
+            pins = details.get("pincodes") or []
+            gp_disp = f"{entity_name} ({gp_hi})" if gp_hi else entity_name
+            lgd_txt = f" [LGD Code: {lgd}]" if lgd else ""
+            blk_txt = f" It operates under {tehsil} Block / Panchayat Samiti." if tehsil else ""
+            v_txt = f"\n\n🏡 Constituent Revenue Villages ({v_cnt}): {', '.join(v_list[:12])}" if v_list else ""
+            pin_txt = f"\n📮 Postal Pincodes: {', '.join(pins)}" if pins else ""
             narrative = (
-                f"{entity_name} is an administrative entity in Rajasthan, located within the {div} and {dist} district.{sd_txt} "
-                f"exercises administrative, developmental, and revenue control over its constituent gram panchayats and revenue villages."
+                f"{gp_disp}{lgd_txt} is an officially recognized Gram Panchayat in Rajasthan, situated in {div} within {dist} district.{blk_txt}{v_txt}{pin_txt}"
+            )
+        elif "tehsil" in etype or "block" in etype:
+            tb_hi = details.get("entity_hindi")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            gp_cnt = details.get("gram_panchayats_count") or 0
+            v_cnt = details.get("villages_count") or 0
+            gps_sample = details.get("gram_panchayats") or []
+            tb_disp = f"{entity_name} ({tb_hi})" if tb_hi else entity_name
+            lgd_txt = f" [LGD Code: {lgd}]" if lgd else ""
+            sd_txt = f" It operates under the {sub_div} sub-divisional jurisdiction and" if sub_div else " It"
+            cnt_txt = f" It administers {gp_cnt} Gram Panchayats and {v_cnt} Revenue Villages." if (gp_cnt or v_cnt) else ""
+            gp_list_txt = f"\n\n🏘️ Key Gram Panchayats: {', '.join(gps_sample[:10])}" if gps_sample else ""
+            narrative = (
+                f"{tb_disp}{lgd_txt} is an administrative {entity_type} in Rajasthan, located within the {div} and {dist} district.{sd_txt} "
+                f"exercises administrative, developmental, and revenue oversight over its constituent gram panchayats and revenue villages.{cnt_txt}{gp_list_txt}"
             )
         elif "urban" in etype or "nigam" in etype or "palika" in etype:
             narrative = (
@@ -891,6 +972,10 @@ async def out_of_scope_helpline_node(state: AgentState) -> AgentState:
         )
 
     state["next_questions"] = next_qs
+    state["mcp_used"] = False
+    state["mcp_tool"] = None
+    state["mcp_transport"] = None
+    state["resolution_stage"] = "guardrail_helpline"
     state["response_text"] = sanitize_structured_output(state["response_text"])
     return state
 
@@ -940,6 +1025,10 @@ async def capability_node(state: AgentState) -> AgentState:
         )
 
     state["next_questions"] = next_qs
+    state["mcp_used"] = False
+    state["mcp_tool"] = None
+    state["mcp_transport"] = None
+    state["resolution_stage"] = "capability"
     state["response_text"] = sanitize_structured_output(state["response_text"])
     return state
 
@@ -1037,6 +1126,23 @@ async def perform_rag_retrieval(query: str, top_k: int = 5) -> List[Dict[str, An
                         "type": "village",
                         "title": f"Village {r['village_eng']} ({r['district_eng']})",
                         "snippet": f"Village: {r['village_eng']} ({r['village_mangal'] or ''}), GP: {r['gp_eng']}, Patwar: {r['patwar_eng']}, ILR: {r['ilr_eng']}, Block: {r['block_eng']}, Tehsil: {r['tehsil_eng']}, District: {r['district_eng']}, Division: {r['division_eng']}, LGD: {r['village_lgdcode']}"
+                    })
+            except Exception:
+                pass
+
+            try:
+                stmt_gp = text("""
+                    SELECT gp_eng, gp_mangal, gp_lgdcode, block_eng, district_eng, division_eng
+                    FROM raj_masters.gp_hierarchy
+                    WHERE gp_eng ILIKE :term OR gp_mangal ILIKE :term
+                    LIMIT :lim
+                """)
+                res_gp = await session.execute(stmt_gp, {"term": f"%{w}%", "lim": top_k})
+                for r in res_gp.mappings():
+                    results.append({
+                        "type": "gram_panchayat",
+                        "title": f"Gram Panchayat {r['gp_eng']} ({r['district_eng']})",
+                        "snippet": f"Gram Panchayat: {r['gp_eng']} ({r['gp_mangal'] or ''}), Block: {r['block_eng']}, District: {r['district_eng']}, Division: {r['division_eng']}, LGD: {r['gp_lgdcode']}"
                     })
             except Exception:
                 pass
@@ -1280,15 +1386,199 @@ def synthesize_web_response(query: str, results: List[Dict[str, Any]], lang: str
         "next_questions": next_qs
     }
 
-# ----------------- NODE 4: Geographic Database Lookup Node -----------------
-async def database_lookup_node(state: AgentState) -> AgentState:
-    # If already looked up during guardrail classification, reuse it
-    if state.get("sql_trace") and state["sql_trace"].get("matched"):
-        return state
+# ----------------- MCP HELPERS -----------------
+KNOWN_MCP_TABLES = [
+    "states", "divisions", "districts", "sub_divisions", "tehsils_blocks",
+    "gram_panchayats", "panchayat_wards", "villages", "urban_local_bodies",
+    "urban_wards", "pincodes", "chat_logs", "scraper_runs", "llm_settings",
+    "rag_support", "admins"
+]
 
+def _detect_mcp_metadata_intent(query: str) -> Optional[Dict[str, Any]]:
+    """Detects database metadata, schema, table listing, or MCP inspection queries."""
+    q = query.strip().lower()
+    if any(p in q for p in ["describe table", "schema of", "columns of", "table schema", "structure of"]):
+        for tbl in KNOWN_MCP_TABLES:
+            if tbl in q:
+                return {"tool": "describe_table", "arguments": {"table_name": tbl}}
+        return {"tool": "describe_table", "arguments": {"table_name": "districts"}}
+
+    if any(p in q for p in ["list tables", "show tables", "what tables", "all tables", "tables in database", "tables exist"]):
+        return {"tool": "list_tables", "arguments": {}}
+
+    if any(p in q for p in [
+        "database stats", "db stats", "mcp stats", "mcp status", "check mcp",
+        "test mcp", "mcp working", "6-tier stats", "record count", "how many records"
+    ]):
+        return {"tool": "get_database_stats", "arguments": {}}
+
+    return None
+
+def _extract_mcp_lookup_term(query: str) -> str:
+    """Extracts a 6-digit pincode or clean location keyword for MCP lineage lookup."""
+    pins = re.findall(r"\b\d{6}\b", query)
+    if pins:
+        return pins[0]
+    words = [w for w in re.split(r"[ ,?.!]+", query.strip()) if len(w) >= 2]
+    candidates = [w for w in words if w.lower() not in STOP_WORDS and len(w) >= 3]
+    return candidates[0] if candidates else query.strip()
+
+def format_mcp_metadata_response(
+    tool_name: str,
+    data: Dict[str, Any],
+    transport: str,
+    lang: str,
+    phone: str
+) -> Dict[str, Any]:
+    """Formats MCP server tool results into clean bilingual responses."""
+    if tool_name == "get_database_stats":
+        s = data.get("summary", {})
+        if lang == "hi":
+            text = (
+                f"PostgreSQL MCP सर्वर लाइव सांख्यिकी ({transport})\n\n"
+                f"• स्तर 1 (राज्य): {s.get('tier_1_state', 0)}\n"
+                f"• स्तर 2 (संभाग): {s.get('tier_2_divisions', 0)}\n"
+                f"• स्तर 3 (जिले): {s.get('tier_3_districts', 0)}\n"
+                f"• स्तर 4 (उपखंड): {s.get('tier_4_sub_divisions', 0)}\n"
+                f"• स्तर 5 (तहसील व ब्लॉक): {s.get('tier_5_tehsils_blocks', 0)}\n"
+                f"• स्तर 6 (ग्रामीण गांव व पंचायत): {s.get('tier_6_rural_villages_gps', 0)}\n"
+                f"• स्तर 6 (नगरीय निकाय): {s.get('tier_6_urban_bodies', 0)}\n"
+                f"• डाक पिनकोड रिकॉर्ड: {s.get('postal_directory_pincodes', 0)}\n\n"
+                f"🏛️ MCP प्रोटोकॉल सत्यापन:\n"
+                f"सर्वर finalairajmaster-postgres-mcp (JSON-RPC 2.0) सक्रिय रूप से कार्यरत है। नागरिक हेल्पलाइन: [{phone}](tel:{phone})"
+            )
+        else:
+            text = (
+                f"PostgreSQL MCP Server Live 6-Tier Statistics ({transport})\n\n"
+                f"• Tier 1 (State): {s.get('tier_1_state', 0)}\n"
+                f"• Tier 2 (Divisions): {s.get('tier_2_divisions', 0)}\n"
+                f"• Tier 3 (Districts): {s.get('tier_3_districts', 0)}\n"
+                f"• Tier 4 (Sub-Divisions): {s.get('tier_4_sub_divisions', 0)}\n"
+                f"• Tier 5 (Tehsils & Blocks): {s.get('tier_5_tehsils_blocks', 0)}\n"
+                f"• Tier 6 (Villages & Gram Panchayats): {s.get('tier_6_rural_villages_gps', 0)}\n"
+                f"• Tier 6 (Urban Local Bodies): {s.get('tier_6_urban_bodies', 0)}\n"
+                f"• Postal Directory Pincodes: {s.get('postal_directory_pincodes', 0)}\n\n"
+                f"🏛️ MCP Protocol Verification:\n"
+                f"Executed via finalairajmaster-postgres-mcp (JSON-RPC 2.0) over {transport}. Citizen Helpline: [{phone}](tel:{phone})"
+            )
+        next_qs = [
+            "What tables exist in the database?",
+            "What is the schema of districts table?",
+            "Tell me about Muhana village administrative hierarchy"
+        ]
+    elif tool_name == "list_tables":
+        tables = data.get("tables", [])
+        lines = [f"• {t['table_name']} ({t['row_count']} rows, {t['column_count']} cols)" for t in tables[:16]]
+        body = "\n".join(lines)
+        text = (
+            f"PostgreSQL MCP Server — Table Registry ({data.get('total_tables', len(tables))} Tables via {transport}):\n\n"
+            f"{body}\n\n"
+            f"🏛️ MCP Protocol Verification:\n"
+            f"Retrieved directly from finalairajmaster-postgres-mcp tool list_tables."
+        )
+        next_qs = [
+            "Show database stats via MCP",
+            "What is the schema of districts table?",
+            "Which division does Balotra district belong to?"
+        ]
+    else:
+        tbl = data.get("table_name", "table")
+        cols = data.get("columns", [])
+        lines = [f"• {c['column_name']}: {c['data_type']} (nullable={c['is_nullable']})" for c in cols[:15]]
+        body = "\n".join(lines)
+        text = (
+            f"PostgreSQL MCP Server — Schema for '{tbl}' ({len(cols)} columns via {transport}):\n\n"
+            f"Primary Keys: {', '.join(data.get('primary_keys', [])) or 'N/A'}\n"
+            f"{body}\n\n"
+            f"🏛️ MCP Protocol Verification:\n"
+            f"Retrieved directly from finalairajmaster-postgres-mcp tool describe_table."
+        )
+        next_qs = [
+            "Show database stats via MCP",
+            "What tables exist in the database?",
+            "Details of pincode 302029"
+        ]
+
+    return {
+        "text": sanitize_structured_output(text),
+        "next_questions": next_qs
+    }
+
+# ----------------- NODE 4: Geographic Database & MCP Lookup Node -----------------
+async def database_lookup_node(state: AgentState) -> AgentState:
     query = state["user_query"]
-    lookup = await lookup_geographic_hierarchy(query)
+
+    # 1. Check for direct MCP database metadata / stats / schema queries
+    mcp_meta_req = _detect_mcp_metadata_intent(query)
+    if mcp_meta_req:
+        try:
+            mcp_res = await mcp_client.call_tool(mcp_meta_req["tool"], mcp_meta_req["arguments"])
+            if mcp_res.get("ok"):
+                state["sql_trace"] = {
+                    "matched": True,
+                    "entity_type": "MCPMetadata",
+                    "entity_name": mcp_meta_req["tool"],
+                    "lineage": {"mcp_tool": mcp_meta_req["tool"], "transport": mcp_res.get("transport")},
+                    "breadcrumbs": ["Rajasthan", "PostgreSQL MCP", mcp_meta_req["tool"]],
+                    "details": mcp_res.get("data", {})
+                }
+                state["mcp_used"] = True
+                state["mcp_tool"] = mcp_meta_req["tool"]
+                state["mcp_transport"] = mcp_res.get("transport")
+                state["resolution_stage"] = "mcp_server"
+                return state
+        except Exception as e:
+            logger.warning(f"MCP metadata lookup failed: {e}")
+
+    # 2. Run primary 6-tier lookup (or reuse pre-match from guardrail) + concurrent MCP lineage check
+    pre_trace = state.get("sql_trace")
+    has_pre_match = bool(pre_trace and pre_trace.get("matched"))
+    mcp_term = _extract_mcp_lookup_term(query)
+
+    async def _run_mcp_lineage():
+        try:
+            return await mcp_client.call_tool(
+                "get_administrative_lineage",
+                {"entity_name_or_pincode": mcp_term}
+            )
+        except Exception as e:
+            logger.debug(f"MCP lineage call skipped ({e})")
+            return None
+
+    if has_pre_match:
+        lookup = pre_trace
+        mcp_res = await _run_mcp_lineage()
+    else:
+        lookup, mcp_res = await asyncio.gather(
+            lookup_geographic_hierarchy(query),
+            _run_mcp_lineage()
+        )
+
+    mcp_ok = bool(mcp_res and mcp_res.get("ok"))
+    mcp_data = (mcp_res or {}).get("data") or {}
+    mcp_matched = bool(mcp_ok and mcp_data.get("matched"))
+
+    # If primary lookup missed but MCP matched, promote MCP result
+    if not lookup.get("matched") and mcp_matched:
+        lookup = {
+            "matched": True,
+            "entity_type": mcp_data.get("entity_type"),
+            "entity_name": mcp_data.get("entity_name"),
+            "lineage": mcp_data.get("lineage", {}),
+            "breadcrumbs": mcp_data.get("breadcrumbs", []),
+            "details": mcp_data.get("lineage", {}),
+            "raw_matches": []
+        }
+        state["resolution_stage"] = "mcp_lineage"
+    elif lookup.get("matched"):
+        state["resolution_stage"] = "postgres_mcp" if mcp_ok else "postgres_direct"
+    else:
+        state["resolution_stage"] = "unmatched"
+
     state["sql_trace"] = lookup
+    state["mcp_used"] = mcp_ok
+    state["mcp_tool"] = "get_administrative_lineage" if mcp_ok else None
+    state["mcp_transport"] = (mcp_res or {}).get("transport") if mcp_ok else None
     return state
 
 # ----------------- NODE 5: Conversational Synthesizer Node -----------------
@@ -1302,7 +1592,21 @@ async def synthesizer_node(state: AgentState) -> AgentState:
     lang = detect_query_language(state["user_query"], state.get("language"))
     state["language"] = lang
 
-    # 1. Exact Database Lineage Match
+    # 0. MCP Database Metadata / Stats Response
+    if matched and lookup.get("entity_type") == "MCPMetadata":
+        state["breadcrumbs"] = lookup.get("breadcrumbs", ["Rajasthan", "PostgreSQL MCP"])
+        mcp_out = format_mcp_metadata_response(
+            tool_name=lookup.get("entity_name") or "get_database_stats",
+            data=lookup.get("details") or {},
+            transport=state.get("mcp_transport") or "stdio-jsonrpc",
+            lang=lang,
+            phone=phone
+        )
+        state["response_text"] = mcp_out["text"]
+        state["next_questions"] = mcp_out["next_questions"]
+        return state
+
+    # 1. Exact Database / MCP Lineage Match
     if matched:
         entity_name = lookup.get("entity_name") or state["user_query"]
         entity_type = lookup.get("entity_type") or "Administrative Entity"
@@ -1310,6 +1614,8 @@ async def synthesizer_node(state: AgentState) -> AgentState:
         details = lookup.get("details", {})
         breadcrumbs = lookup.get("breadcrumbs", [])
         state["breadcrumbs"] = breadcrumbs
+        if not state.get("resolution_stage") or state.get("resolution_stage") == "unmatched":
+            state["resolution_stage"] = "postgres_mcp" if state.get("mcp_used") else "postgres_direct"
 
         next_questions = generate_next_expected_questions(entity_name, entity_type, lineage, details, lang)
         state["next_questions"] = next_questions
@@ -1334,6 +1640,7 @@ async def synthesizer_node(state: AgentState) -> AgentState:
             rag_results = await perform_rag_retrieval(state["user_query"], top_k=rag_top_k)
             if rag_results:
                 state["breadcrumbs"] = ["Rajasthan", "Verified Records"]
+                state["resolution_stage"] = "rag_retrieval"
                 rag_out = synthesize_rag_response(state["user_query"], rag_results, lang, phone)
                 state["response_text"] = rag_out["text"]
                 state["next_questions"] = rag_out["next_questions"]
@@ -1356,6 +1663,7 @@ async def synthesizer_node(state: AgentState) -> AgentState:
             )
             if web_results:
                 state["breadcrumbs"] = ["Rajasthan", "Web Verified"]
+                state["resolution_stage"] = "web_search"
                 web_out = synthesize_web_response(state["user_query"], web_results, lang, phone)
                 state["response_text"] = web_out["text"]
                 state["next_questions"] = web_out["next_questions"]
@@ -1365,6 +1673,7 @@ async def synthesizer_node(state: AgentState) -> AgentState:
 
     # 4. Respectful Out-of-Records Fallback
     state["breadcrumbs"] = ["Rajasthan", "Query Search"]
+    state["resolution_stage"] = "not_found_helpline"
     if lang == "hi":
         next_qs = [
             "पिनकोड 302029 का विवरण",

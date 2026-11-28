@@ -1,5 +1,6 @@
 import logging
 import re
+import unicodedata
 from typing import List, Dict, Any, Optional
 from sqlalchemy import select, or_, func, text
 from app.db.session import AsyncSessionLocal
@@ -55,7 +56,7 @@ STOP_WORDS = {
     "है", "हैं", "आता", "आती", "आते", "पड़ता", "पड़ती", "गांव", "तहसील", "जिला", "संभाग",
     "उपखंड", "ब्लॉक", "पंचायत", "समिति", "नगर", "निगम", "परिषद", "पालिका", "प्रशासनिक",
     "वंशावली", "पदानुक्रम", "विवरण", "जानकारी", "अधिकार", "क्षेत्र", "अध्यक्ष", "प्रधान",
-    "पिनकोड", "डाक"
+    "पिनकोड", "डाक", "और", "दें", "दे", "गाँव", "ग्राम", "पर", "से", "को", "ने", "वाले", "वाली"
 }
 
 async def _build_pincode_result(session, p_item: Pincode, matched_locality: Optional[str] = None) -> Dict[str, Any]:
@@ -324,6 +325,15 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
             terms_to_try = [clean_query]
 
         is_pincode_intent = any(k in q_lower for k in ["pincode", "pin code", "postal", "post office", "पिनकोड", "डाक"])
+        is_gp_intent = (
+            any(k in q_lower for k in ["gram panchayat", "ग्राम पंचायत"])
+            or (
+                any(k in q_lower for k in ["panchayat", "sarpanch", "पंचायत", "सरपंच"])
+                and not any(k in q_lower for k in ["samiti", "समिति", "village", "gaon", "गांव", "गाँव"])
+            )
+        )
+        is_block_intent = any(k in q_lower for k in ["block", "panchayat samiti", "bdo", "ब्लॉक", "पंचायत समिति"])
+        is_tehsil_intent = any(k in q_lower for k in ["tehsil", "tehsildar", "तहसील"])
         is_village_intent = any(k in q_lower for k in [
             "village", "gaon", "गाँव", "गांव", "ग्राम", "patwar", "patwari", "पटवार", "पटवारी",
             "gram panchayat", "panchayat", "sarpanch", "सरपंच", "पंचायत", "ilr", "lgd"
@@ -400,7 +410,10 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
 
         async def _search_village_or_gp(term_str: str) -> Optional[Dict[str, Any]]:
             st_term = f"%{term_str}%"
-            v_stmt = (
+            t_low = term_str.lower()
+            other_ctx = [tok for tok in context_tokens if tok != t_low and len(tok) >= 3]
+
+            base_q = (
                 select(Village, District.name_en.label("dist_name"), GramPanchayat.name_en.label("gp_name"))
                 .outerjoin(District, Village.district_id == District.id)
                 .outerjoin(GramPanchayat, Village.gram_panchayat_id == GramPanchayat.id)
@@ -411,9 +424,24 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                         Village.patwar_circle.ilike(st_term),
                     )
                 )
-                .limit(30)
             )
-            v_rows = (await session.execute(v_stmt)).all()
+            v_rows = []
+            # If user supplied district/tehsil context tokens (e.g. "Rampura village in Kota"), try context-filtered query first
+            if other_ctx:
+                ctx_filters = []
+                for tok in other_ctx:
+                    ct = f"%{tok}%"
+                    ctx_filters.append(District.name_en.ilike(ct))
+                    ctx_filters.append(GramPanchayat.name_en.ilike(ct))
+                    ctx_filters.append(func.cast(Village.metadata_json, Village.name_en.type).ilike(ct))
+                v_rows = (await session.execute(
+                    base_q.where(or_(*ctx_filters)).order_by(func.length(Village.name_en).asc()).limit(50)
+                )).all()
+
+            if not v_rows:
+                v_rows = (await session.execute(
+                    base_q.order_by(func.length(Village.name_en).asc()).limit(50)
+                )).all()
             if v_rows:
                 scored = []
                 t_low = term_str.lower()
@@ -448,48 +476,213 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                             others.append(lbl)
                 return await _build_village_result(best_v, others)
 
-            # Check Gram Panchayats
-            gp_row = (await session.execute(
-                select(GramPanchayat).where(
-                    or_(GramPanchayat.name_en.ilike(st_term), GramPanchayat.name_hi.ilike(st_term))
-                ).order_by(func.length(GramPanchayat.name_en).asc()).limit(1)
-            )).scalar_one_or_none()
-            if gp_row:
-                dist = (await session.execute(select(District).where(District.id == gp_row.district_id))).scalar_one_or_none() if gp_row.district_id else None
-                div = (await session.execute(select(Division).where(Division.id == dist.division_id))).scalar_one_or_none() if dist and dist.division_id else None
-                tb = (await session.execute(select(TehsilBlock).where(TehsilBlock.id == gp_row.tehsil_block_id))).scalar_one_or_none() if gp_row.tehsil_block_id else None
-                gp_meta = gp_row.metadata_json if isinstance(gp_row.metadata_json, dict) else {}
-                div_name = (div.name_en if div else None) or gp_meta.get("division")
-                dist_name = dist.name_en if dist else None
-                tb_name = (tb.name_en if tb else None) or gp_meta.get("block_eng")
-                return {
-                    "matched": True,
-                    "entity_type": "Gram Panchayat",
-                    "entity_name": gp_row.name_en,
-                    "lineage": {
-                        "state": "Rajasthan",
-                        "division": div_name,
-                        "district": dist_name,
-                        "tehsil_or_block": tb_name,
-                        "gram_panchayat": gp_row.name_en,
-                        "sarpanch": gp_row.sarpanch,
-                        "lgd_code": gp_row.lgd_code,
-                    },
-                    "breadcrumbs": [x for x in ["Rajasthan", div_name, dist_name, tb_name, gp_row.name_en] if x],
-                    "details": {
-                        "gram_panchayat_english": gp_row.name_en,
-                        "gram_panchayat_hindi": gp_row.name_hi,
-                        "sarpanch": gp_row.sarpanch,
-                        "tehsil_or_block": tb_name,
-                        "district": dist_name,
-                        "division": div_name,
-                        "collectorate": dist.collectorate_details if dist else None,
-                        "zila_pramukh": dist.zila_pramukh if dist else None,
-                        "lgd_code": gp_row.lgd_code,
-                    },
-                    "raw_matches": []
-                }
-            return None
+        async def _build_gp_result(gp_row: GramPanchayat, other_matches: Optional[List[str]] = None) -> Dict[str, Any]:
+            dist = (await session.execute(select(District).where(District.id == gp_row.district_id))).scalar_one_or_none() if gp_row.district_id else None
+            div = (await session.execute(select(Division).where(Division.id == dist.division_id))).scalar_one_or_none() if dist and dist.division_id else None
+            tb = (await session.execute(select(TehsilBlock).where(TehsilBlock.id == gp_row.tehsil_block_id))).scalar_one_or_none() if gp_row.tehsil_block_id else None
+            gp_meta = gp_row.metadata_json if isinstance(gp_row.metadata_json, dict) else {}
+            div_name = (div.name_en if div else None) or gp_meta.get("division")
+            dist_name = dist.name_en if dist else gp_meta.get("district")
+            tb_name = (tb.name_en if tb else None) or gp_meta.get("block_eng")
+
+            # Fetch constituent villages & pincodes for this Gram Panchayat
+            v_rows_gp = (await session.execute(
+                select(Village.name_en, Village.pincode)
+                .where(Village.gram_panchayat_id == gp_row.id)
+                .order_by(Village.name_en.asc())
+                .limit(25)
+            )).all()
+            v_cnt_gp = (await session.execute(
+                select(func.count(Village.id)).where(Village.gram_panchayat_id == gp_row.id)
+            )).scalar() or 0
+            child_villages = [r[0] for r in v_rows_gp if r[0]]
+            gp_pincodes = sorted({r[1] for r in v_rows_gp if r[1]})
+
+            return {
+                "matched": True,
+                "entity_type": "Gram Panchayat",
+                "entity_name": gp_row.name_en,
+                "lineage": {
+                    "state": "Rajasthan",
+                    "division": div_name,
+                    "district": dist_name,
+                    "tehsil_or_block": tb_name,
+                    "gram_panchayat": gp_row.name_en,
+                    "gram_panchayat_hi": gp_row.name_hi,
+                    "sarpanch": gp_row.sarpanch,
+                    "code": gp_row.code,
+                    "lgd_code": gp_row.lgd_code,
+                    "villages_count": v_cnt_gp,
+                    "pincodes": gp_pincodes,
+                },
+                "breadcrumbs": [x for x in ["Rajasthan", div_name, dist_name, tb_name, gp_row.name_en] if x],
+                "details": {
+                    "gram_panchayat_english": gp_row.name_en,
+                    "gram_panchayat_hindi": gp_row.name_hi,
+                    "code": gp_row.code,
+                    "sarpanch": gp_row.sarpanch,
+                    "bdo": tb.bdo_details if tb else (f"BDO, {tb_name}" if tb_name else None),
+                    "tehsil_or_block": tb_name,
+                    "district": dist_name,
+                    "division": div_name,
+                    "collectorate": dist.collectorate_details if dist else None,
+                    "zila_pramukh": dist.zila_pramukh if dist else None,
+                    "lgd_code": gp_row.lgd_code,
+                    "villages_count": v_cnt_gp,
+                    "villages": child_villages,
+                    "pincodes": gp_pincodes,
+                    "other_matches": other_matches or [],
+                },
+                "raw_matches": []
+            }
+
+        async def _search_gram_panchayat(term_str: str) -> Optional[Dict[str, Any]]:
+            st_term = f"%{term_str}%"
+            t_low = term_str.lower()
+            other_ctx = [tok for tok in context_tokens if tok != t_low and len(tok) >= 3]
+            base_gp = (
+                select(GramPanchayat, District.name_en.label("dist_name"), TehsilBlock.name_en.label("tb_name"))
+                .outerjoin(District, GramPanchayat.district_id == District.id)
+                .outerjoin(TehsilBlock, GramPanchayat.tehsil_block_id == TehsilBlock.id)
+                .where(or_(GramPanchayat.name_en.ilike(st_term), GramPanchayat.name_hi.ilike(st_term)))
+            )
+            gp_rows = []
+            if other_ctx:
+                ctx_f = []
+                for tok in other_ctx:
+                    ct = f"%{tok}%"
+                    ctx_f.append(District.name_en.ilike(ct))
+                    ctx_f.append(TehsilBlock.name_en.ilike(ct))
+                gp_rows = (await session.execute(
+                    base_gp.where(or_(*ctx_f)).order_by(func.length(GramPanchayat.name_en).asc()).limit(30)
+                )).all()
+            if not gp_rows:
+                gp_rows = (await session.execute(
+                    base_gp.order_by(func.length(GramPanchayat.name_en).asc()).limit(30)
+                )).all()
+            if not gp_rows:
+                return None
+
+            scored = []
+            for gp_obj, d_nm, tb_nm in gp_rows:
+                sc = 0
+                g_en = (gp_obj.name_en or "").lower()
+                g_hi = (gp_obj.name_hi or "").lower()
+                if g_en == t_low or g_hi == t_low:
+                    sc += 100
+                elif g_en.startswith(t_low):
+                    sc += 50
+                hay = " ".join(filter(None, [d_nm, tb_nm])).lower()
+                for tok in other_ctx:
+                    if tok in hay:
+                        sc += 40
+                scored.append((sc, gp_obj, d_nm, tb_nm))
+            scored.sort(key=lambda x: (-x[0], len(x[1].name_en or ""), x[1].id))
+            best_gp = scored[0][1]
+            others = [
+                f"{g.name_en} ({tb_n}, {d_n})" if tb_n else f"{g.name_en} ({d_n})"
+                for _, g, d_n, tb_n in scored[1:5]
+                if (g.name_en or "").lower() == (best_gp.name_en or "").lower() and d_n
+            ]
+            return await _build_gp_result(best_gp, others)
+
+        async def _search_tehsil_block(term_str: str) -> Optional[Dict[str, Any]]:
+            st_term = f"%{term_str}%"
+            t_low = term_str.lower()
+            other_ctx = [tok for tok in context_tokens if tok != t_low and len(tok) >= 3]
+            base_tb = (
+                select(TehsilBlock, District.name_en.label("dist_name"))
+                .outerjoin(District, TehsilBlock.district_id == District.id)
+                .where(or_(TehsilBlock.name_en.ilike(st_term), TehsilBlock.name_hi.ilike(st_term)))
+            )
+            tb_rows = []
+            if other_ctx:
+                ctx_f = [District.name_en.ilike(f"%{tok}%") for tok in other_ctx]
+                tb_rows = (await session.execute(
+                    base_tb.where(or_(*ctx_f)).order_by(func.length(TehsilBlock.name_en).asc()).limit(25)
+                )).all()
+            if not tb_rows:
+                tb_rows = (await session.execute(
+                    base_tb.order_by(func.length(TehsilBlock.name_en).asc()).limit(25)
+                )).all()
+            if not tb_rows:
+                return None
+
+            scored = []
+            for tb_obj, d_nm in tb_rows:
+                sc = 0
+                tb_en = (tb_obj.name_en or "").lower()
+                tb_hi = (tb_obj.name_hi or "").lower()
+                etype_low = (tb_obj.entity_type or "").lower()
+                if tb_en == t_low or tb_hi == t_low:
+                    sc += 100
+                elif tb_en.startswith(t_low):
+                    sc += 50
+                if is_block_intent and "block" in etype_low:
+                    sc += 60
+                elif is_tehsil_intent and "tehsil" in etype_low:
+                    sc += 60
+                if d_nm:
+                    for tok in other_ctx:
+                        if tok in d_nm.lower():
+                            sc += 45
+                scored.append((sc, tb_obj))
+            scored.sort(key=lambda x: (-x[0], len(x[1].name_en or ""), x[1].id))
+            tb = scored[0][1]
+
+            dist = (await session.execute(select(District).where(District.id == tb.district_id))).scalar_one_or_none() if tb.district_id else None
+            div = (await session.execute(select(Division).where(Division.id == dist.division_id))).scalar_one_or_none() if dist and dist.division_id else None
+            sd = (await session.execute(select(SubDivision).where(SubDivision.id == tb.sub_division_id))).scalar_one_or_none() if tb.sub_division_id else None
+
+            gp_cnt = (await session.execute(select(func.count(GramPanchayat.id)).where(GramPanchayat.tehsil_block_id == tb.id))).scalar() or 0
+            block_gp_ids_subq = select(GramPanchayat.id).where(GramPanchayat.tehsil_block_id == tb.id)
+            v_cnt = (await session.execute(
+                select(func.count(Village.id)).where(
+                    or_(Village.tehsil_block_id == tb.id, Village.gram_panchayat_id.in_(block_gp_ids_subq))
+                )
+            )).scalar() or 0
+            sample_gps = [r[0] for r in (await session.execute(
+                select(GramPanchayat.name_en).where(GramPanchayat.tehsil_block_id == tb.id).order_by(GramPanchayat.name_en.asc()).limit(12)
+            )).all() if r[0]]
+
+            return {
+                "matched": True,
+                "entity_type": tb.entity_type,
+                "entity_name": tb.name_en,
+                "lineage": {
+                    "state": "Rajasthan",
+                    "division": div.name_en if div else None,
+                    "district": dist.name_en if dist else None,
+                    "sub_division": sd.name_en if sd else None,
+                    "tehsil_or_block": tb.name_en,
+                    "tehsil_or_block_hi": tb.name_hi,
+                    "entity_type": tb.entity_type,
+                    "code": tb.code,
+                    "lgd_code": tb.lgd_code,
+                    "gram_panchayats_count": gp_cnt,
+                    "villages_count": v_cnt,
+                },
+                "breadcrumbs": [x for x in ["Rajasthan", div.name_en if div else None, dist.name_en if dist else None, sd.name_en if sd else None, tb.name_en] if x],
+                "details": {
+                    "entity_english": tb.name_en,
+                    "entity_hindi": tb.name_hi,
+                    "entity_type": tb.entity_type,
+                    "code": tb.code,
+                    "tehsildar": tb.tehsildar_details,
+                    "bdo": tb.bdo_details,
+                    "sdm_jurisdiction": sd.sdm_jurisdiction if sd else None,
+                    "collectorate": dist.collectorate_details if dist else None,
+                    "zila_pramukh": dist.zila_pramukh if dist else None,
+                    "lgd_code": tb.lgd_code,
+                    "gram_panchayats_count": gp_cnt,
+                    "gram_panchayats": sample_gps,
+                    "villages_count": v_cnt,
+                },
+                "raw_matches": []
+            }
+
+            # Check Gram Panchayats (fallback inside _search_village_or_gp)
+            return await _search_gram_panchayat(term_str)
 
         async def _search_pincode_by_place(term_str: str):
             st_term = f"%{term_str}%"
@@ -530,17 +723,55 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                 return await _build_pincode_result(session, p_obj)
             return None
 
-        if is_pincode_intent:
+        expanded_terms = []
+        for t in terms_to_try:
+            if t not in expanded_terms:
+                expanded_terms.append(t)
+            nfkd_t = unicodedata.normalize("NFKD", t)
+            if nfkd_t not in expanded_terms:
+                expanded_terms.append(nfkd_t)
+            no_nukta_t = nfkd_t.replace("\u093c", "")
+            if no_nukta_t not in expanded_terms:
+                expanded_terms.append(no_nukta_t)
+        terms_to_try = expanded_terms
+
+        if is_pincode_intent and not (is_gp_intent or is_block_intent or is_tehsil_intent):
             for term in terms_to_try:
                 p_res = await _search_pincode_by_place(term)
                 if p_res:
                     return p_res
 
+        if is_gp_intent:
+            for term in terms_to_try:
+                if term.lower() in context_tokens and len(context_tokens) > 1:
+                    is_known_dist = (await session.execute(select(District.id).where(
+                        or_(District.name_en.ilike(term), District.name_hi.ilike(term))
+                    ).limit(1))).scalar_one_or_none()
+                    if is_known_dist:
+                        continue
+                gp_res = await _search_gram_panchayat(term)
+                if gp_res:
+                    return gp_res
+
+        if is_block_intent or is_tehsil_intent:
+            for term in terms_to_try:
+                if term.lower() in context_tokens and len(context_tokens) > 1:
+                    is_known_dist = (await session.execute(select(District.id).where(
+                        or_(District.name_en.ilike(term), District.name_hi.ilike(term))
+                    ).limit(1))).scalar_one_or_none()
+                    if is_known_dist:
+                        continue
+                tb_res = await _search_tehsil_block(term)
+                if tb_res:
+                    return tb_res
+
         if is_village_intent:
             for term in terms_to_try:
                 # Skip pure district/division context tokens if a longer/village term exists
                 if term.lower() in context_tokens and len(context_tokens) > 1:
-                    is_known_dist = (await session.execute(select(District.id).where(District.name_en.ilike(term)).limit(1))).scalar_one_or_none()
+                    is_known_dist = (await session.execute(select(District.id).where(
+                        or_(District.name_en.ilike(term), District.name_hi.ilike(term))
+                    ).limit(1))).scalar_one_or_none()
                     if is_known_dist:
                         continue
                 v_res = await _search_village_or_gp(term)
@@ -603,36 +834,9 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                 return result
 
             # Check Tehsils & Blocks
-            tb = (await session.execute(select(TehsilBlock).where(
-                or_(TehsilBlock.name_en.ilike(sterm), TehsilBlock.name_hi.ilike(sterm))
-            ).limit(1))).scalar_one_or_none()
-            if tb:
-                dist = (await session.execute(select(District).where(District.id == tb.district_id))).scalar_one_or_none() if tb.district_id else None
-                div = (await session.execute(select(Division).where(Division.id == dist.division_id))).scalar_one_or_none() if dist and dist.division_id else None
-                sd = (await session.execute(select(SubDivision).where(SubDivision.id == tb.sub_division_id))).scalar_one_or_none() if tb.sub_division_id else None
-                result["matched"] = True
-                result["entity_type"] = tb.entity_type
-                result["entity_name"] = tb.name_en
-                result["lineage"] = {
-                    "state": "Rajasthan",
-                    "division": div.name_en if div else None,
-                    "district": dist.name_en if dist else None,
-                    "sub_division": sd.name_en if sd else None,
-                    "tehsil_or_block": tb.name_en,
-                    "entity_type": tb.entity_type,
-                    "lgd_code": tb.lgd_code
-                }
-                result["breadcrumbs"] = [x for x in ["Rajasthan", div.name_en if div else None, dist.name_en if dist else None, sd.name_en if sd else None, tb.name_en] if x]
-                result["details"] = {
-                    "entity_english": tb.name_en,
-                    "entity_hindi": tb.name_hi,
-                    "entity_type": tb.entity_type,
-                    "tehsildar": tb.tehsildar_details,
-                    "bdo": tb.bdo_details,
-                    "sdm_jurisdiction": sd.sdm_jurisdiction if sd else None,
-                    "lgd_code": tb.lgd_code
-                }
-                return result
+            tb_res = await _search_tehsil_block(term)
+            if tb_res:
+                return tb_res
 
             # Check Urban Local Bodies
             ulb = (await session.execute(select(UrbanLocalBody).where(

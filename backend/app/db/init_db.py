@@ -8,7 +8,7 @@ from app.db.session import async_engine, AsyncSessionLocal, Base
 from app.db.models import (
     State, Division, District, SubDivision, TehsilBlock,
     GramPanchayat, PanchayatWard, Village, UrbanLocalBody, UrbanWard,
-    Pincode, Admin, LLMSetting, ScraperRun
+    Pincode, Admin, PortalUser, LLMSetting, ScraperRun
 )
 from app.config import settings
 
@@ -574,21 +574,23 @@ async def seed_initial_data():
         await session.commit()
 
         # 6. Sub-Divisions
-        for sd in FALLBACK_SUBDIVISIONS:
-            res = await session.execute(select(SubDivision).filter_by(rajmaster_id=sd["rajmaster_id"]))
-            if not res.scalar_one_or_none():
-                sd_obj = SubDivision(
-                    district_id=sd["district_id"],
-                    rajmaster_id=sd["rajmaster_id"],
-                    code=sd["code"],
-                    name_en=sd["name_en"],
-                    name_hi=sd["name_hi"],
-                    sdm_jurisdiction=sd["sdm_jurisdiction"],
-                    lgd_code=sd["lgd_code"],
-                    metadata_json={"source": "seed"}
-                )
-                session.add(sd_obj)
-        await session.commit()
+        existing_sd_count = (await session.execute(select(func.count(SubDivision.id)))).scalar() or 0
+        if existing_sd_count < len(FALLBACK_SUBDIVISIONS):
+            for sd in FALLBACK_SUBDIVISIONS:
+                res = await session.execute(select(SubDivision).filter_by(rajmaster_id=sd["rajmaster_id"]))
+                if not res.scalar_one_or_none():
+                    sd_obj = SubDivision(
+                        district_id=sd["district_id"],
+                        rajmaster_id=sd["rajmaster_id"],
+                        code=sd["code"],
+                        name_en=sd["name_en"],
+                        name_hi=sd["name_hi"],
+                        sdm_jurisdiction=sd["sdm_jurisdiction"],
+                        lgd_code=sd["lgd_code"],
+                        metadata_json={"source": "seed"}
+                    )
+                    session.add(sd_obj)
+            await session.commit()
 
         # 7. Tehsils & Blocks
         for tb in FALLBACK_TEHSILS_BLOCKS:
@@ -652,41 +654,45 @@ async def seed_initial_data():
         await session.commit()
 
         # 10. ULBs
-        for u in FALLBACK_ULBS:
-            res = await session.execute(select(UrbanLocalBody).filter_by(name_en=u["name_en"]))
-            if not res.scalars().first():
-                u_obj = UrbanLocalBody(
-                    district_id=u["district_id"],
-                    rajmaster_id=u["rajmaster_id"],
-                    code=u["code"],
-                    name_en=u["name_en"],
-                    name_hi=u["name_hi"],
-                    ulb_type=u["ulb_type"],
-                    city_name=u["city_name"],
-                    pincode=u["pincode"],
-                    lgd_code=u["lgd_code"],
-                    metadata_json={"source": "seed"}
-                )
-                session.add(u_obj)
-        await session.commit()
+        existing_ulb_count = (await session.execute(select(func.count(UrbanLocalBody.id)))).scalar() or 0
+        if existing_ulb_count < len(FALLBACK_ULBS):
+            for u in FALLBACK_ULBS:
+                res = await session.execute(select(UrbanLocalBody).filter_by(name_en=u["name_en"]))
+                if not res.scalars().first():
+                    u_obj = UrbanLocalBody(
+                        district_id=u["district_id"],
+                        rajmaster_id=u["rajmaster_id"],
+                        code=u["code"],
+                        name_en=u["name_en"],
+                        name_hi=u["name_hi"],
+                        ulb_type=u["ulb_type"],
+                        city_name=u["city_name"],
+                        pincode=u["pincode"],
+                        lgd_code=u["lgd_code"],
+                        metadata_json={"source": "seed"}
+                    )
+                    session.add(u_obj)
+            await session.commit()
 
         # 11. Urban Wards
-        for uw in FALLBACK_URBAN_WARDS:
-            res = await session.execute(select(UrbanWard).filter_by(ulb_id=uw["ulb_id"], ward_number=uw["ward_number"]))
-            if not res.scalars().first():
-                uw_obj = UrbanWard(
-                    ulb_id=uw["ulb_id"],
-                    rajmaster_id=uw["rajmaster_id"],
-                    ward_number=uw["ward_number"],
-                    name_en=uw["name_en"],
-                    name_hi=uw["name_hi"],
-                    councillor_parshad=uw["councillor_parshad"],
-                    pincode=uw["pincode"],
-                    lgd_code=uw["lgd_code"],
-                    metadata_json={"source": "seed"}
-                )
-                session.add(uw_obj)
-        await session.commit()
+        existing_ward_count = (await session.execute(select(func.count(UrbanWard.id)))).scalar() or 0
+        if existing_ward_count < len(FALLBACK_URBAN_WARDS):
+            for uw in FALLBACK_URBAN_WARDS:
+                res = await session.execute(select(UrbanWard).filter_by(ulb_id=uw["ulb_id"], ward_number=uw["ward_number"]))
+                if not res.scalars().first():
+                    uw_obj = UrbanWard(
+                        ulb_id=uw["ulb_id"],
+                        rajmaster_id=uw["rajmaster_id"],
+                        ward_number=uw["ward_number"],
+                        name_en=uw["name_en"],
+                        name_hi=uw["name_hi"],
+                        councillor_parshad=uw["councillor_parshad"],
+                        pincode=uw["pincode"],
+                        lgd_code=uw["lgd_code"],
+                        metadata_json={"source": "seed"}
+                    )
+                    session.add(uw_obj)
+            await session.commit()
 
         # 12. Pincodes (Insert only missing fallback entries; resolve district/division by name)
         dist_rows = (await session.execute(select(District))).scalars().all()

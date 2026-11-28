@@ -241,6 +241,20 @@ class Admin(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
+class PortalUser(Base):
+    __tablename__ = "portal_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    name = Column(String(150), nullable=False)
+    phone = Column(String(50), nullable=True, default="")
+    email = Column(String(150), nullable=True, default="")
+    password_hash = Column(String(255), nullable=False)
+    preferred_language = Column(String(20), default="en")
+    role = Column(String(50), default="user")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
 class LLMSetting(Base):
     __tablename__ = "llm_settings"
 

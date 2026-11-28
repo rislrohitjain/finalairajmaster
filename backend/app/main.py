@@ -11,6 +11,7 @@ from app.api.chat import router as chat_router, chat_endpoint, ingest_document
 from app.api.admin import router as admin_router, admin_login, AdminLoginRequest
 from app.api.user import router as user_router
 from app.db.session import async_engine
+from app.mcp.client import mcp_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("main")
@@ -27,7 +28,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Startup DB check notice: {e}")
     yield
-    logger.info("Shutting down database connection engine...")
+    logger.info("Shutting down database connection engine and MCP client...")
+    try:
+        await mcp_client.close()
+    except Exception as e:
+        logger.warning(f"MCP close notice: {e}")
     try:
         await async_engine.dispose()
     except Exception as e:
@@ -91,6 +96,8 @@ async def root():
             "chat_stream": "/api/chat/stream",
             "capabilities": "/api/capabilities",
             "geo_search": "/api/geo/search",
+            "mcp_status": "/api/mcp/status",
+            "llm_status": "/api/llm/status",
             "admin_login": "/api/admin/login",
             "admin_llm_config": "/api/admin/llm-config",
             "admin_geo_stats": "/api/admin/geo-stats",

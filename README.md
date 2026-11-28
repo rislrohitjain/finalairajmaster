@@ -32,8 +32,9 @@ The system models and navigates Rajasthan's complete **6-Tier Administrative Hie
 
 ---
 
-## 🔑 Default Credentials & Helpline
+## 🔑 Default Credentials, Resume & Helpline
 
+- **Developer Resume & Contact**: [https://rohitjain-resume.vercel.app/](https://rohitjain-resume.vercel.app/)
 - **Admin Login Mobile / Username**: `8946919241`
 - **Admin Password**: `123456`
 - **Citizen Support Helpline**: `89988555525` (`tel:89988555525`)

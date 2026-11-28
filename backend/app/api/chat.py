@@ -1,9 +1,10 @@
+import os
 import time
 import json
 import asyncio
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from app.agent.graph import rajmaster_agent
@@ -13,6 +14,7 @@ from app.db.models import ChatLog, LLMSetting
 from app.config import settings
 from app.api.example_questions import EXAMPLE_QUESTIONS
 from app.llm_client import IS_HUGGINGFACE, get_embedding, generate_chat_reply
+from app.mcp.client import mcp_client
 
 router = APIRouter(prefix="/api", tags=["Chat & Geo"])
 
@@ -41,14 +43,44 @@ class ChatResponse(BaseModel):
     helpline_card: bool = False
     support_phone: str
     latency_ms: int
+    mcp_used: bool = False
+    mcp_tool: Optional[str] = None
+    mcp_transport: Optional[str] = None
+    resolution_stage: Optional[str] = None
+
+@router.get("/mcp/status")
+async def get_mcp_status():
+    """Returns live PostgreSQL MCP server health, transport mode, tools, and 6-tier summary"""
+    return await mcp_client.health_check()
+
+@router.get("/docs/architecture-guide")
+async def download_architecture_guide():
+    """Downloads the complete Full-Stack, LLM, MCP & PostgreSQL Word guide (.docx) for NotebookLM"""
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    candidates = [
+        os.path.join(base_dir, "..", "RajMaster_AI_Complete_FullStack_LLM_Postgres_Guide.docx"),
+        os.path.join(base_dir, "..", "frontend", "public", "RajMaster_AI_Complete_FullStack_LLM_Postgres_Guide.docx"),
+        os.path.join(base_dir, "RajMaster_AI_Complete_FullStack_LLM_Postgres_Guide.docx"),
+    ]
+    for path in candidates:
+        norm = os.path.abspath(path)
+        if os.path.isfile(norm):
+            return FileResponse(
+                norm,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                filename="RajMaster_AI_Complete_FullStack_LLM_Postgres_Guide.docx"
+            )
+    raise HTTPException(status_code=404, detail="Architecture guide Word document not found.")
 
 @router.get("/llm/status")
 async def get_llm_status():
     """Returns the active LLM engine status, provider, and cloud readiness"""
     from app.llm_client import get_active_llm_info
+    mcp_health = await mcp_client.health_check()
     return {
         "status": "online",
         "llm_engine": get_active_llm_info(),
+        "mcp_server": mcp_health,
         "supported_cloud_providers": [
             {"provider": "google_gemini", "env_key": "GEMINI_API_KEY", "model": "gemini-1.5-flash"},
             {"provider": "groq", "env_key": "GROQ_API_KEY", "model": "llama-3.3-70b-versatile"},
@@ -320,7 +352,11 @@ async def chat_endpoint(req: ChatRequest):
         "support_phone": settings.SUPPORT_PHONE,
         "response_text": "",
         "streaming_tokens": [],
-        "next_questions": []
+        "next_questions": [],
+        "mcp_used": False,
+        "mcp_tool": None,
+        "mcp_transport": None,
+        "resolution_stage": None
     }
 
     try:
@@ -394,7 +430,11 @@ async def chat_endpoint(req: ChatRequest):
         details=sql_trace.get("details"),
         helpline_card=agent_result.get("helpline_card", False),
         support_phone=agent_result.get("support_phone") or settings.SUPPORT_PHONE,
-        latency_ms=latency_ms
+        latency_ms=latency_ms,
+        mcp_used=bool(agent_result.get("mcp_used", False)),
+        mcp_tool=agent_result.get("mcp_tool"),
+        mcp_transport=agent_result.get("mcp_transport"),
+        resolution_stage=agent_result.get("resolution_stage")
     )
 
 @router.post("/chat/stream")
@@ -413,7 +453,11 @@ async def chat_stream_endpoint(req: ChatRequest):
         "support_phone": settings.SUPPORT_PHONE,
         "response_text": "",
         "streaming_tokens": [],
-        "next_questions": []
+        "next_questions": [],
+        "mcp_used": False,
+        "mcp_tool": None,
+        "mcp_transport": None,
+        "resolution_stage": None
     }
 
     agent_result = await rajmaster_agent.ainvoke(initial_state)
@@ -463,7 +507,11 @@ async def chat_stream_endpoint(req: ChatRequest):
             "details": sql_trace.get("details"),
             "helpline_card": agent_result.get("helpline_card", False),
             "support_phone": agent_result.get("support_phone") or settings.SUPPORT_PHONE,
-            "latency_ms": latency_ms
+            "latency_ms": latency_ms,
+            "mcp_used": bool(agent_result.get("mcp_used", False)),
+            "mcp_tool": agent_result.get("mcp_tool"),
+            "mcp_transport": agent_result.get("mcp_transport"),
+            "resolution_stage": agent_result.get("resolution_stage")
         })
         yield f"data: {final_meta}\n\n"
 

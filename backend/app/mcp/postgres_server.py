@@ -20,6 +20,7 @@ try:
     DB_USER = settings.DB_USER
     DB_PASSWORD = settings.DB_PASSWORD
     DB_NAME = settings.DB_NAME
+    RAW_SYNC_URL = settings.sync_database_url
 except Exception:
     DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
     if DB_HOST.lower() == "localhost":
@@ -28,6 +29,7 @@ except Exception:
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "Admin@123")
     DB_NAME = os.getenv("DB_NAME", "finalairajmaster")
+    RAW_SYNC_URL = os.getenv("DATABASE_URL", "")
 
 # Configure logger to output only to stderr so stdout remains clean for JSON-RPC
 logger = logging.getLogger("mcp.postgres")
@@ -38,7 +40,18 @@ logger.setLevel(logging.INFO)
 
 
 def get_db_connection():
-    """Returns a psycopg2 connection to PostgreSQL with dictionary cursor."""
+    """Returns a psycopg2 connection for both local PostgreSQL and live cloud DATABASE_URL."""
+    env_db_url = os.getenv("DATABASE_URL") or (
+        RAW_SYNC_URL if (os.getenv("VERCEL") or os.getenv("SPACE_ID") or os.getenv("ENV_MODE") == "huggingface") else ""
+    )
+    if env_db_url:
+        dsn = env_db_url.strip()
+        if dsn.startswith("postgresql+psycopg2://"):
+            dsn = "postgresql://" + dsn[len("postgresql+psycopg2://"):]
+        elif dsn.startswith("postgres://"):
+            dsn = "postgresql://" + dsn[len("postgres://"):]
+        return psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+
     return psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -47,6 +60,11 @@ def get_db_connection():
         dbname=DB_NAME,
         cursor_factory=RealDictCursor
     )
+
+
+def _clean_breadcrumbs(items: List[Optional[str]]) -> List[str]:
+    """Filters out None and blank entries from breadcrumb sequences."""
+    return [str(x).strip() for x in items if x is not None and str(x).strip()]
 
 
 # =====================================================================
@@ -223,17 +241,42 @@ def tool_get_administrative_lineage(entity_name_or_pincode: str) -> Dict[str, An
                             "locality": row["city_or_village"],
                             "pincode": row["pincode"]
                         },
-                        "breadcrumbs": [
+                        "breadcrumbs": _clean_breadcrumbs([
                             "Rajasthan",
                             row["division_name"],
                             row["district_name"],
                             row["tehsil_name"],
                             row["ulb_name"] or row["gp_name"],
                             row["city_or_village"]
-                        ]
+                        ])
                     }
 
-            # 2. Village Match
+            # 2. Exact District Match (prevents e.g. 'Balotra' from resolving to a block before its district)
+            cur.execute("""
+                SELECT d.*, div.name_en AS division_name, div.divisional_commissioner
+                FROM districts d
+                LEFT JOIN divisions div ON d.division_id = div.id
+                WHERE LOWER(d.name_en) = LOWER(%s) OR LOWER(COALESCE(d.name_hi, '')) = LOWER(%s) LIMIT 1;
+            """, (term, term))
+            exact_d_row = cur.fetchone()
+            if exact_d_row:
+                return {
+                    "matched": True,
+                    "entity_type": "District",
+                    "entity_name": exact_d_row["name_en"],
+                    "lineage": {
+                        "state": "Rajasthan",
+                        "division": exact_d_row["division_name"],
+                        "district": exact_d_row["name_en"],
+                        "zila_pramukh": exact_d_row["zila_pramukh"],
+                        "collectorate": exact_d_row["collectorate_details"],
+                        "divisional_commissioner": exact_d_row["divisional_commissioner"],
+                        "lgd_code": exact_d_row["lgd_code"]
+                    },
+                    "breadcrumbs": _clean_breadcrumbs(["Rajasthan", exact_d_row["division_name"], exact_d_row["name_en"]])
+                }
+
+            # 3. Village Match
             cur.execute("""
                 SELECT v.*, d.name_en AS district_name, div.name_en AS division_name,
                        tb.name_en AS tehsil_name, gp.name_en AS gp_name, gp.sarpanch
@@ -263,17 +306,17 @@ def tool_get_administrative_lineage(entity_name_or_pincode: str) -> Dict[str, An
                         "pincode": v_row["pincode"],
                         "lgd_code": v_row["lgd_code"]
                     },
-                    "breadcrumbs": [
+                    "breadcrumbs": _clean_breadcrumbs([
                         "Rajasthan",
                         v_row["division_name"],
                         v_row["district_name"],
                         v_row["tehsil_name"],
                         v_row["gp_name"],
                         v_row["name_en"]
-                    ]
+                    ])
                 }
 
-            # 3. Tehsil / Block Match
+            # 4. Tehsil / Block Match
             cur.execute("""
                 SELECT tb.*, d.name_en AS district_name, div.name_en AS division_name, sd.name_en AS sub_division_name
                 FROM tehsils_blocks tb
@@ -298,16 +341,16 @@ def tool_get_administrative_lineage(entity_name_or_pincode: str) -> Dict[str, An
                         "bdo": tb_row["bdo_details"],
                         "lgd_code": tb_row["lgd_code"]
                     },
-                    "breadcrumbs": [
+                    "breadcrumbs": _clean_breadcrumbs([
                         "Rajasthan",
                         tb_row["division_name"],
                         tb_row["district_name"],
                         tb_row["sub_division_name"],
                         tb_row["name_en"]
-                    ]
+                    ])
                 }
 
-            # 4. District Match
+            # 5. Fuzzy District Match
             cur.execute("""
                 SELECT d.*, div.name_en AS division_name, div.divisional_commissioner
                 FROM districts d
@@ -329,10 +372,10 @@ def tool_get_administrative_lineage(entity_name_or_pincode: str) -> Dict[str, An
                         "divisional_commissioner": d_row["divisional_commissioner"],
                         "lgd_code": d_row["lgd_code"]
                     },
-                    "breadcrumbs": ["Rajasthan", d_row["division_name"], d_row["name_en"]]
+                    "breadcrumbs": _clean_breadcrumbs(["Rajasthan", d_row["division_name"], d_row["name_en"]])
                 }
 
-            # 5. Urban Local Body Match
+            # 6. Urban Local Body Match
             cur.execute("""
                 SELECT ulb.*, d.name_en AS district_name, div.name_en AS division_name
                 FROM urban_local_bodies ulb
@@ -356,10 +399,10 @@ def tool_get_administrative_lineage(entity_name_or_pincode: str) -> Dict[str, An
                         "pincode": ulb_row["pincode"],
                         "lgd_code": ulb_row["lgd_code"]
                     },
-                    "breadcrumbs": ["Rajasthan", ulb_row["division_name"], ulb_row["district_name"], ulb_row["name_en"]]
+                    "breadcrumbs": _clean_breadcrumbs(["Rajasthan", ulb_row["division_name"], ulb_row["district_name"], ulb_row["name_en"]])
                 }
 
-            # 6. Division Match
+            # 7. Division Match
             cur.execute("""
                 SELECT div.*, 
                        (SELECT json_agg(d.name_en) FROM districts d WHERE d.division_id = div.id) AS districts_list
@@ -379,7 +422,7 @@ def tool_get_administrative_lineage(entity_name_or_pincode: str) -> Dict[str, An
                         "districts": div_row["districts_list"] or [],
                         "lgd_code": div_row["lgd_code"]
                     },
-                    "breadcrumbs": ["Rajasthan", div_row["name_en"]]
+                    "breadcrumbs": _clean_breadcrumbs(["Rajasthan", div_row["name_en"]])
                 }
 
             return {
