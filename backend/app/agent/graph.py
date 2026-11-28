@@ -466,13 +466,23 @@ def format_natural_language_lineage(
                 f"प्रशासनिक दृष्टि से यह क्षेत्र {translate_crumb(div, 'hi')} के अंतर्गत {dist} जिले में स्थित है।{teh_txt}{office_txt}{loc_txt}"
             )
         elif "village" in etype:
+            v_hi = details.get("village_hindi") or lineage.get("village_hi")
+            ilr = details.get("ilr_circle") or lineage.get("ilr_circle")
+            blk = details.get("block_hi") or details.get("block") or lineage.get("block")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            v_name_disp = f"{entity_name} ({v_hi})" if v_hi else entity_name
+            ilr_txt = f" यह {ilr} गिरदावर (ILR) सर्कल" if ilr else ""
             patwar_txt = f" और {patwar} पटवार सर्कल" if patwar else ""
+            blk_txt = f", {blk} पंचायत समिति (ब्लॉक)" if blk else ""
             pin_txt = f" (पिनकोड {pincode})" if pincode else ""
-            gp_txt = f", तथा इसका स्थानीय ग्रामीण प्रशासन {gp} ग्राम पंचायत{patwar_txt}{pin_txt} द्वारा संचालित होता है" if gp else ""
-            teh_txt = f" उप-जिला स्तर पर यह {tehsil} तहसील एवं पंचायत समिति (ब्लॉक) के अधिकार क्षेत्र में आता है{gp_txt}।" if tehsil else ""
+            lgd_txt = f" [LGD कोड: {lgd}]" if lgd else ""
+            gp_txt = f", तथा {gp} ग्राम पंचायत{blk_txt}{ilr_txt}{patwar_txt}{pin_txt} के अंतर्गत आता है" if gp else f"{blk_txt}{ilr_txt}{patwar_txt}{pin_txt}"
+            teh_txt = f" उप-जिला स्तर पर यह {tehsil} तहसील के अधिकार क्षेत्र में स्थित है{gp_txt}।" if tehsil else ""
+            other_m = details.get("other_matches") or []
+            other_txt = f"\n\n📌 इसी नाम के अन्य गांव: {', '.join(other_m)}" if other_m else ""
             narrative = (
-                f"{entity_name} राजस्थान राज्य का एक आधिकारिक राजस्व गांव (Revenue Village) है। "
-                f"प्रशासनिक दृष्टिकोण से यह {translate_crumb(div, 'hi')} के तहत {dist} जिले में स्थित है।{teh_txt}"
+                f"{v_name_disp}{lgd_txt} राजस्थान राज्य का एक आधिकारिक राजस्व गांव (Revenue Village) है। "
+                f"प्रशासनिक दृष्टिकोण से यह {translate_crumb(div, 'hi')} के तहत {dist} जिले में स्थित है।{teh_txt}{other_txt}"
             )
         elif "districtslist" in etype or "districts" in etype:
             d_items = details.get("districts") or []
@@ -492,10 +502,16 @@ def format_natural_language_lineage(
         elif "district" in etype:
             count_intro = ""
             if details.get("is_count_query"):
+                v_cnt = details.get("villages_count")
+                tb_cnt = details.get("tehsils_count")
+                gp_cnt = details.get("gram_panchayats_count")
                 if details.get("asked_villages"):
-                    count_intro = f"{entity_name} जिले में राजस्व गांवों की संख्या के संदर्भ में: राजस्थान के 2023-2024 प्रशासनिक पुनर्गठन के अनुसार जिले के सभी राजस्व गांव संबंधित तहसीलों एवं ग्राम पंचायतों के अधीन व्यवस्थित हैं। "
+                    cnt_str = f" कुल {v_cnt:,} राजस्व गांव" if v_cnt else " सभी राजस्व गांव"
+                    gp_str = f" तथा {gp_cnt:,} ग्राम पंचायतें" if gp_cnt else ""
+                    count_intro = f"{entity_name} जिले में{cnt_str}{gp_str} संबंधित तहसीलों एवं ग्राम पंचायतों के अधीन व्यवस्थित हैं। "
                 elif details.get("asked_tehsils"):
-                    count_intro = f"{entity_name} जिले में तहसीलों की संख्या: वर्तमान प्रशासनिक रिकॉर्ड के अनुसार {entity_name} के अंतर्गत मुख्य तहसीलें एवं ब्लॉक कार्यरत हैं। "
+                    tb_str = f" कुल {tb_cnt} तहसीलें व ब्लॉक" if tb_cnt else " मुख्य तहसीलें एवं ब्लॉक"
+                    count_intro = f"{entity_name} जिले में वर्तमान प्रशासनिक रिकॉर्ड के अनुसार{tb_str} कार्यरत हैं। "
 
             narrative = (
                 f"{count_intro}{entity_name} राजस्थान राज्य का एक प्रमुख जिला (District) है, "
@@ -587,13 +603,23 @@ def format_natural_language_lineage(
                 f"Administrative view se yeh {div} ke andar {dist} district mein sthit hai.{teh_txt}{office_txt}{loc_txt}"
             )
         elif "village" in etype:
+            v_hi = details.get("village_hindi") or lineage.get("village_hi")
+            ilr = details.get("ilr_circle") or lineage.get("ilr_circle")
+            blk = details.get("block") or lineage.get("block")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            v_name_disp = f"{entity_name} ({v_hi})" if v_hi else entity_name
+            ilr_txt = f", {ilr} ILR Circle" if ilr else ""
             patwar_txt = f" aur {patwar} Patwar Circle" if patwar else ""
+            blk_txt = f", {blk} Block" if blk else ""
             pin_txt = f" (Pincode {pincode})" if pincode else ""
-            gp_txt = f", jiska local administration {gp} Gram Panchayat{patwar_txt}{pin_txt} ke dwara sambhala jata hai" if gp else ""
-            teh_txt = f" Sub-district level par yeh {tehsil} Tehsil & Block jurisdiction mein aata hai{gp_txt}." if tehsil else ""
+            lgd_txt = f" [LGD Code: {lgd}]" if lgd else ""
+            gp_txt = f", jiska local administration {gp} Gram Panchayat{blk_txt}{ilr_txt}{patwar_txt}{pin_txt} ke dwara sambhala jata hai" if gp else f"{blk_txt}{ilr_txt}{patwar_txt}{pin_txt}"
+            teh_txt = f" Sub-district level par yeh {tehsil} Tehsil jurisdiction mein aata hai{gp_txt}." if tehsil else ""
+            other_m = details.get("other_matches") or []
+            other_txt = f"\n\n📌 Is naam ke anya gaon: {', '.join(other_m)}" if other_m else ""
             narrative = (
-                f"{entity_name} Rajasthan state ka ek recognized Revenue Village hai. "
-                f"Administrative roop se yeh {div} ke andar {dist} district mein sthit hai.{teh_txt}"
+                f"{v_name_disp}{lgd_txt} Rajasthan state ka ek recognized Revenue Village hai. "
+                f"Administrative roop se yeh {div} ke andar {dist} district mein sthit hai.{teh_txt}{other_txt}"
             )
         elif "districtslist" in etype or "districts" in etype:
             d_items = details.get("districts") or []
@@ -613,10 +639,16 @@ def format_natural_language_lineage(
         elif "district" in etype:
             count_intro = ""
             if details.get("is_count_query"):
+                v_cnt = details.get("villages_count")
+                tb_cnt = details.get("tehsils_count")
+                gp_cnt = details.get("gram_panchayats_count")
                 if details.get("asked_villages"):
-                    count_intro = f"{entity_name} district mein villages ki number/count ke bare mein: Rajasthan administrative setup mein sabhi revenue villages unki respective Tehsils aur Gram Panchayats ke under organized hain. "
+                    cnt_str = f" total {v_cnt:,} revenue villages" if v_cnt else " sabhi revenue villages"
+                    gp_str = f" aur {gp_cnt:,} gram panchayats" if gp_cnt else ""
+                    count_intro = f"{entity_name} district mein{cnt_str}{gp_str} apni respective Tehsils aur Blocks ke under organized hain. "
                 elif details.get("asked_tehsils"):
-                    count_intro = f"{entity_name} district mein tehsils ki sankhya: District apne revenue tehsils aur development blocks ke zariye administer hota hai. "
+                    tb_str = f" total {tb_cnt} tehsils aur blocks" if tb_cnt else " revenue tehsils aur development blocks"
+                    count_intro = f"{entity_name} district mein{tb_str} work kar rahe hain. "
 
             narrative = (
                 f"{count_intro}{entity_name} Rajasthan ka ek pramukh District hai, jo {div} ke administrative jurisdiction mein aata hai. "
@@ -706,13 +738,23 @@ def format_natural_language_lineage(
                 f"Administratively, this postal zone is situated in the {div} within {dist} district.{teh_txt}{office_txt}{loc_txt}"
             )
         elif "village" in etype:
+            v_hi = details.get("village_hindi") or lineage.get("village_hi")
+            ilr = details.get("ilr_circle") or lineage.get("ilr_circle")
+            blk = details.get("block") or lineage.get("block")
+            lgd = details.get("lgd_code") or lineage.get("lgd_code")
+            v_name_disp = f"{entity_name} ({v_hi})" if v_hi else entity_name
+            ilr_txt = f", {ilr} ILR Circle" if ilr else ""
             patwar_txt = f" and {patwar} Patwar Circle" if patwar else ""
+            blk_txt = f", {blk} Block" if blk else ""
             pin_txt = f" with postal pincode {pincode}" if pincode else ""
-            gp_txt = f", governed locally by the {gp} Gram Panchayat{patwar_txt}{pin_txt}" if gp else ""
-            teh_txt = f" At the sub-district tier, it comes under the jurisdiction of {tehsil} Tehsil & Block{gp_txt}." if tehsil else ""
+            lgd_txt = f" [LGD Code: {lgd}]" if lgd else ""
+            gp_txt = f", governed locally by {gp} Gram Panchayat{blk_txt}{ilr_txt}{patwar_txt}{pin_txt}" if gp else f"{blk_txt}{ilr_txt}{patwar_txt}{pin_txt}"
+            teh_txt = f" At the sub-district tier, it falls under {tehsil} Tehsil{gp_txt}." if tehsil else ""
+            other_m = details.get("other_matches") or []
+            other_txt = f"\n\n📌 Other villages with the same name: {', '.join(other_m)}" if other_m else ""
             narrative = (
-                f"{entity_name} is a recognized Revenue Village located in Rajasthan. "
-                f"Administratively, it falls under the {div} and is situated within {dist} district.{teh_txt}"
+                f"{v_name_disp}{lgd_txt} is a recognized Revenue Village located in Rajasthan. "
+                f"Administratively, it falls under the {div} within {dist} district.{teh_txt}{other_txt}"
             )
         elif "districtslist" in etype or "districts" in etype:
             d_items = details.get("districts") or []
@@ -732,10 +774,16 @@ def format_natural_language_lineage(
         elif "district" in etype:
             count_intro = ""
             if details.get("is_count_query"):
+                v_cnt = details.get("villages_count")
+                tb_cnt = details.get("tehsils_count")
+                gp_cnt = details.get("gram_panchayats_count")
                 if details.get("asked_villages"):
-                    count_intro = f"Regarding the number of villages in {entity_name}: In the administrative structure of Rajasthan, revenue villages are organized under their constituent Tehsils and Gram Panchayats. "
+                    cnt_str = f" {v_cnt:,} official revenue villages" if v_cnt else " revenue villages"
+                    gp_str = f" across {gp_cnt:,} Gram Panchayats" if gp_cnt else ""
+                    count_intro = f"{entity_name} district comprises{cnt_str}{gp_str} organized under its constituent Tehsils and Blocks. "
                 elif details.get("asked_tehsils"):
-                    count_intro = f"Regarding the number of tehsils in {entity_name}: The district is structured into active administrative tehsils and development blocks. "
+                    tb_str = f" {tb_cnt} active tehsils and development blocks" if tb_cnt else " active administrative tehsils and development blocks"
+                    count_intro = f"{entity_name} district is structured into{tb_str}. "
 
             narrative = (
                 f"{count_intro}{entity_name} is an officially recognized District of Rajasthan, "
@@ -973,6 +1021,25 @@ async def perform_rag_retrieval(query: str, top_k: int = 5) -> List[Dict[str, An
                     "title": f"District {r['name_en']}",
                     "snippet": f"District: {r['name_en']} ({r['name_hi'] or ''}), Division: {r['division_name']}, Collectorate: {r['collectorate_details']}, Zila Pramukh: {r['zila_pramukh']}"
                 })
+
+        # 4. Villages search in raj_masters.village_hierarchy
+        for w in words[:2]:
+            try:
+                stmt_v = text("""
+                    SELECT village_eng, village_mangal, gp_eng, patwar_eng, ilr_eng, tehsil_eng, block_eng, district_eng, division_eng, village_lgdcode
+                    FROM raj_masters.village_hierarchy
+                    WHERE village_eng ILIKE :term OR village_mangal ILIKE :term OR gp_eng ILIKE :term OR patwar_eng ILIKE :term
+                    LIMIT :lim
+                """)
+                res_v = await session.execute(stmt_v, {"term": f"%{w}%", "lim": top_k})
+                for r in res_v.mappings():
+                    results.append({
+                        "type": "village",
+                        "title": f"Village {r['village_eng']} ({r['district_eng']})",
+                        "snippet": f"Village: {r['village_eng']} ({r['village_mangal'] or ''}), GP: {r['gp_eng']}, Patwar: {r['patwar_eng']}, ILR: {r['ilr_eng']}, Block: {r['block_eng']}, Tehsil: {r['tehsil_eng']}, District: {r['district_eng']}, Division: {r['division_eng']}, LGD: {r['village_lgdcode']}"
+                    })
+            except Exception:
+                pass
 
     # Deduplicate by snippet
     seen = set()
