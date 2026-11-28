@@ -540,6 +540,13 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                 }
                 return result
 
+            # If this is a multi-word phrase (e.g. "Saran Nagar", "Lambia Kalan", "Malviya Nagar"),
+            # check pincode localities/offices before breaking down to single-word partial matches
+            if len(term.split()) >= 2:
+                p_res = await _search_pincode_by_place(term)
+                if p_res:
+                    return p_res
+
         # 4. Fallback: search Pincode localities/offices for any unmatched place name (e.g., "Saran Nagar", "Bhiwari")
         if not is_pincode_intent:
             for term in terms_to_try:

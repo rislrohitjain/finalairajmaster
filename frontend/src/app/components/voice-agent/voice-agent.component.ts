@@ -103,11 +103,11 @@ export class VoiceAgentComponent implements OnInit, OnDestroy {
   private playInitialGreeting(): void {
     let greetingText = '';
     if (this.currentLanguage === 'hi') {
-      greetingText = 'नमस्ते! मैं राजस्थान प्रशासनिक मास्टर की वॉयस असिस्टेंट हूँ। आप राजस्थान के किसी भी जिले, तहसील, या गांव के बारे में पूछ सकते हैं।';
+      greetingText = 'नमस्ते! मैं राजस्थान एडमिनिस्ट्रेटिव मास्टर AI शोकेस की वॉयस असिस्टेंट हूँ। आप राजस्थान के किसी भी संभाग, जिले, तहसील या गांव के बारे में पूछ सकते हैं।';
     } else if (this.currentLanguage === 'hinglish') {
-      greetingText = 'Namaste! Main Rajasthan Administrative Master ki voice assistant hoon. Aap Rajasthan ke kisi bhi district, tehsil, ya village ke baare mein pooch sakte hain.';
+      greetingText = 'Namaste! Main Rajasthan Administrative Master AI Showcase ki voice assistant hoon. Aap kisi bhi district, tehsil ya village ke baare mein pooch sakte hain.';
     } else {
-      greetingText = 'Namaste! I am your AI voice assistant for the Rajasthan Administrative and Geographic Master. Feel free to ask about any district, tehsil, or village.';
+      greetingText = 'Namaste! I am your voice assistant for the Rajasthan AI and LLM Architecture Showcase. Feel free to ask about any division, district, tehsil, or village.';
     }
 
     this.agentSpokenText = greetingText;

@@ -130,7 +130,7 @@ async def get_active_llm_config() -> Dict[str, Any]:
         "active_model": settings.DEFAULT_OLLAMA_MODEL,
         "temperature": 0.2,
         "max_tokens": 1024,
-        "system_prompt": "You are the official Rajasthan Geographic Master Data Engine. Output strictly structured data with zero conversational filler.",
+        "system_prompt": "You are RajMaster AI, a full-stack educational showcase agent demonstrating LangGraph and LLM architecture on a simulated Rajasthan geographic knowledge graph. Output clean, structured bilingual answers with zero conversational filler.",
         "greeting_message": "Welcome here chat with Jain's only",
         "support_phone": settings.SUPPORT_PHONE,
         "enable_rag": True,
@@ -606,9 +606,9 @@ def format_natural_language_lineage(
             items_str = "\n".join(lines)
             narrative = (
                 f"Rajasthan comprises **50 Districts** organized under **10 Administrative Divisions**. "
-                f"Here is an official list of 10 key administrative districts along with their respective divisions:\n\n"
+                f"Here is a curated list from the knowledge graph of 10 key administrative districts along with their respective divisions:\n\n"
                 f"{items_str}\n\n"
-                f"Each district functions under the executive administration of its District Collectorate (IAS) and the democratic governance of its Zila Parishad (Zila Pramukh)."
+                f"Each district functions under the executive administration of its District Collectorate and the democratic governance of its Zila Parishad."
             )
         elif "district" in etype:
             count_intro = ""
@@ -630,7 +630,7 @@ def format_natural_language_lineage(
             )
         elif "urban" in etype or "nigam" in etype or "palika" in etype:
             narrative = (
-                f"{entity_name} Rajasthan ki ek official Urban Local Body hai, jo {div} ke {dist} district mein aati hai. "
+                f"{entity_name} Rajasthan ki ek recognized Urban Local Body hai, jo {div} ke {dist} district mein aati hai. "
                 f"Yeh civic infrastructure, urban wards aur municipal services ki dekh-rekh karti hai."
             )
         elif "state" in etype:
@@ -725,9 +725,9 @@ def format_natural_language_lineage(
             items_str = "\n".join(lines)
             narrative = (
                 f"Rajasthan comprises **50 Districts** organized under **10 Administrative Divisions**. "
-                f"Here is an official list of 10 key administrative districts along with their respective divisions:\n\n"
+                f"Here is a curated list from the knowledge graph of 10 key administrative districts along with their respective divisions:\n\n"
                 f"{items_str}\n\n"
-                f"Each district functions under the executive administration of its District Collectorate (IAS) and the democratic governance of its Zila Parishad (Zila Pramukh)."
+                f"Each district functions under the executive administration of its District Collectorate and the democratic governance of its Zila Parishad."
             )
         elif "district" in etype:
             count_intro = ""

@@ -45,6 +45,27 @@ export interface GeoStats {
   total_entities: number;
 }
 
+export interface TimingStage {
+  stage: string;
+  component: string;
+  tech: string;
+  latency_ms: number;
+  percentage: number;
+  status: 'optimal' | 'moderate' | 'bottleneck';
+  description: string;
+}
+
+export interface TimingBreakdown {
+  python_ms: number;
+  db_ms: number;
+  llm_ms: number;
+  postprocess_ms: number;
+  total_ms: number;
+  model: string;
+  bottleneck_stage: string;
+  stages: TimingStage[];
+}
+
 export interface ChatLogItem {
   id: number;
   session_id: string;
@@ -52,6 +73,7 @@ export interface ChatLogItem {
   detected_intent: string;
   ai_response: string;
   sql_lookup_trace: any;
+  timing_breakdown?: TimingBreakdown;
   latency_ms: number;
   created_at: string;
 }

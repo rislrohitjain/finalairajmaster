@@ -1,10 +1,11 @@
-import { Component, OnInit, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ChatService, ChatMessage, CapabilityData, ExampleQuestion } from '../../services/chat.service';
 import { AuthService } from '../../services/auth.service';
+import { UserService, UserProfile } from '../../services/user.service';
 import { VoiceAgentComponent } from '../voice-agent/voice-agent.component';
 
 @Component({
@@ -14,7 +15,7 @@ import { VoiceAgentComponent } from '../voice-agent/voice-agent.component';
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css']
 })
-export class ChatComponent implements OnInit, AfterViewChecked {
+export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
 
   sessionId: string = 'session-' + Math.random().toString(36).substring(2, 9);
@@ -239,9 +240,29 @@ export class ChatComponent implements OnInit, AfterViewChecked {
 
   copiedMessageId: string | null = null;
 
+  // --- WhatsApp-Style Inactivity Privacy Shield (Req 7) ---
+  inactivitySecondsRemaining: number = 120; // 2 minutes
+  isChatHidden: boolean = false;
+  private inactivityInterval: any = null;
+  private activityListener = () => this.onUserActivity();
+
+  // --- User Auth & Profile Modal (Req 8) ---
+  isUserAuthModalOpen: boolean = false;
+  userAuthTab: 'login' | 'register' | 'profile' = 'login';
+  userLoginForm = { username: '', password: '' };
+  userRegisterForm = { name: '', username: '', phone: '', email: '', password: '', preferred_language: 'en' };
+  userProfileForm = { name: '', phone: '', email: '', preferred_language: 'en' };
+  userAuthNotice: string = '';
+  isUserAuthLoading: boolean = false;
+
+  // --- First-Time Greeting & Respectful Name Capture (Req 9) ---
+  isAwaitingName: boolean = true;
+  hasCapturedName: boolean = false;
+
   constructor(
     public chatService: ChatService,
     public auth: AuthService,
+    public userService: UserService,
     private sanitizer: DomSanitizer
   ) {}
 
@@ -353,8 +374,197 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   }
 
   ngOnInit(): void {
+    this.initInactivityTimer();
     this.loadCapabilities();
     this.loadExampleQuestions();
+  }
+
+  ngOnDestroy(): void {
+    if (this.inactivityInterval) {
+      clearInterval(this.inactivityInterval);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mousemove', this.activityListener);
+      window.removeEventListener('keydown', this.activityListener);
+      window.removeEventListener('touchstart', this.activityListener);
+      window.removeEventListener('click', this.activityListener);
+    }
+  }
+
+  // --- WhatsApp-Style Inactivity Privacy Shield Methods (Req 7) ---
+  private initInactivityTimer(): void {
+    this.inactivitySecondsRemaining = 120;
+    this.isChatHidden = false;
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mousemove', this.activityListener, { passive: true });
+      window.addEventListener('keydown', this.activityListener, { passive: true });
+      window.addEventListener('touchstart', this.activityListener, { passive: true });
+      window.addEventListener('click', this.activityListener, { passive: true });
+    }
+
+    if (this.inactivityInterval) {
+      clearInterval(this.inactivityInterval);
+    }
+
+    this.inactivityInterval = setInterval(() => {
+      if (this.inactivitySecondsRemaining > 0) {
+        this.inactivitySecondsRemaining--;
+        if (this.inactivitySecondsRemaining === 0) {
+          this.isChatHidden = true; // Auto-hide chat after 2 minutes of inactivity
+        }
+      }
+    }, 1000);
+  }
+
+  private onUserActivity(): void {
+    if (!this.isChatHidden) {
+      this.inactivitySecondsRemaining = 120;
+    }
+  }
+
+  toggleChatPrivacy(): void {
+    this.isChatHidden = !this.isChatHidden;
+    if (!this.isChatHidden) {
+      this.inactivitySecondsRemaining = 120;
+    }
+  }
+
+  revealChat(): void {
+    this.isChatHidden = false;
+    this.inactivitySecondsRemaining = 120;
+  }
+
+  get formattedInactivityTime(): string {
+    const mins = Math.floor(this.inactivitySecondsRemaining / 60);
+    const secs = this.inactivitySecondsRemaining % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+
+  // --- User Auth & Profile Modal Methods (Req 8) ---
+  openUserAuthModal(tab: 'login' | 'register' | 'profile' = 'login'): void {
+    this.userAuthTab = tab;
+    this.userAuthNotice = '';
+    const current = this.userService.currentUser();
+    if (current) {
+      this.userProfileForm = {
+        name: current.name || '',
+        phone: current.phone || '',
+        email: current.email || '',
+        preferred_language: current.preferred_language || 'en'
+      };
+    }
+    this.isUserAuthModalOpen = true;
+  }
+
+  closeUserAuthModal(): void {
+    this.isUserAuthModalOpen = false;
+    this.userAuthNotice = '';
+  }
+
+  onUserLogin(): void {
+    if (!this.userLoginForm.username.trim()) {
+      this.userAuthNotice = 'Please enter your username, phone, or email.';
+      return;
+    }
+    this.isUserAuthLoading = true;
+    this.userAuthNotice = 'Signing in...';
+    this.userService.login(this.userLoginForm.username, this.userLoginForm.password).subscribe({
+      next: (res) => {
+        this.isUserAuthLoading = false;
+        this.userAuthNotice = `✓ Welcome back, ${res.user.name || res.user.username} ji!`;
+        this.updateGreetingForUser(res.user.name);
+        setTimeout(() => this.closeUserAuthModal(), 1200);
+      },
+      error: (err) => {
+        this.isUserAuthLoading = false;
+        this.userAuthNotice = 'Login error: ' + (err.error?.detail || err.message);
+      }
+    });
+  }
+
+  onUserRegister(): void {
+    if (!this.userRegisterForm.name.trim() || !this.userRegisterForm.username.trim()) {
+      this.userAuthNotice = 'Please enter your full name and a username / mobile.';
+      return;
+    }
+    this.isUserAuthLoading = true;
+    this.userAuthNotice = 'Creating user profile...';
+    this.userService.register(this.userRegisterForm).subscribe({
+      next: (res) => {
+        this.isUserAuthLoading = false;
+        this.userAuthNotice = `✓ Profile created successfully! Welcome, ${res.user.name} ji!`;
+        this.updateGreetingForUser(res.user.name);
+        setTimeout(() => this.closeUserAuthModal(), 1200);
+      },
+      error: (err) => {
+        this.isUserAuthLoading = false;
+        this.userAuthNotice = 'Registration error: ' + (err.error?.detail || err.message);
+      }
+    });
+  }
+
+  onUpdateUserProfile(): void {
+    if (!this.userProfileForm.name.trim()) {
+      this.userAuthNotice = 'Name cannot be empty.';
+      return;
+    }
+    this.isUserAuthLoading = true;
+    this.userAuthNotice = 'Saving profile changes...';
+    this.userService.updateProfile(this.userProfileForm).subscribe({
+      next: (res) => {
+        this.isUserAuthLoading = false;
+        this.userAuthNotice = '✓ Profile updated successfully!';
+        setTimeout(() => this.closeUserAuthModal(), 1200);
+      },
+      error: (err) => {
+        this.isUserAuthLoading = false;
+        this.userAuthNotice = 'Update error: ' + (err.error?.detail || err.message);
+      }
+    });
+  }
+
+  onUserLogout(): void {
+    this.userService.logout();
+    this.closeUserAuthModal();
+  }
+
+  // --- Respectful First-Time Greeting & Name Setup (Req 9) ---
+  private setupInitialGreeting(customGreeting?: string): void {
+    const user = this.userService.currentUser();
+    const userName = user?.name ? user.name.trim() : '';
+
+    let greetingText = '';
+    if (userName) {
+      this.isAwaitingName = false;
+      this.hasCapturedName = true;
+      greetingText = `नमस्ते **${userName} जी**! 🙏\n\nWelcome to this **Full-Stack AI & LLM Engineering Portfolio Showcase** (Demonstrating LangGraph, Multi-Cloud LLMs, Python FastAPI, and PostgreSQL Hierarchy).\n\nआप राजस्थान के किसी भी जिले, तहसील, उपखंड, गांव, नगरीय निकाय या 6-डिजिट पिनकोड के बारे में पूछ सकते हैं। How may I assist you today?`;
+    } else {
+      this.isAwaitingName = true;
+      this.hasCapturedName = false;
+      greetingText = `नमस्ते! 🙏\n\nWelcome to this **Full-Stack AI & LLM Architecture Portfolio Showcase** (Demonstrating LangGraph Multi-Agent Workflows, Multi-Cloud LLM Failovers, Python FastAPI, and PostgreSQL Vector RAG).\n\nबातचीत शुरू करने से पहले, क्या मैं आदरपूर्वक आपका **शुभ नाम** जान सकता हूँ? 🙏\n*(Before we proceed, may I respectfully know your good name?)*`;
+    }
+
+    if (this.messages.length === 0) {
+      this.messages.push({
+        id: 'init-msg',
+        sender: 'assistant',
+        text: greetingText,
+        timestamp: new Date(),
+        intent: 'capability_query',
+        supportPhone: this.supportPhone
+      });
+    }
+  }
+
+  private updateGreetingForUser(name: string): void {
+    if (!name) return;
+    this.hasCapturedName = true;
+    this.isAwaitingName = false;
+    const initMsg = this.messages.find(m => m.id === 'init-msg' || m.id === 'init-fallback');
+    if (initMsg) {
+      initMsg.text = `नमस्ते **${name} जी**! 🙏\n\nWelcome to this **Full-Stack AI & LLM Engineering Portfolio Showcase**.\n\nDemonstrating LangGraph multi-agent orchestration, multi-cloud LLM routing, and PostgreSQL Vector RAG across Rajasthan's 10 divisions, 50 districts, tehsils, and pincodes. How may I assist you today?`;
+    }
   }
 
   ngAfterViewChecked(): void {
@@ -371,29 +581,10 @@ export class ChatComponent implements OnInit, AfterViewChecked {
         if (data.sample_prompts && data.sample_prompts.length > 0) {
           this.quickChips = data.sample_prompts;
         }
-        // Add initial greeting from support assistant
-        if (this.messages.length === 0) {
-          this.messages.push({
-            id: 'init-msg',
-            sender: 'assistant',
-            text: data.greeting || "Welcome here chat with Jain's only",
-            timestamp: new Date(),
-            intent: 'capability_query',
-            supportPhone: this.supportPhone
-          });
-        }
+        this.setupInitialGreeting(data.greeting);
       },
       error: () => {
-        if (this.messages.length === 0) {
-          this.messages.push({
-            id: 'init-fallback',
-            sender: 'assistant',
-            text: "Welcome here chat with Jain's only",
-            timestamp: new Date(),
-            intent: 'capability_query',
-            supportPhone: this.supportPhone
-          });
-        }
+        this.setupInitialGreeting();
       }
     });
   }
@@ -460,6 +651,52 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   sendMessage(): void {
     const q = this.inputQuery.trim();
     if (!q || this.isStreaming) return;
+
+    // Reset inactivity privacy timer on user activity
+    this.resetInactivityTimer();
+
+    // Check if awaiting respectful user name (Req 9)
+    if (this.isAwaitingName && !this.hasCapturedName) {
+      const trimmed = q.trim();
+      const nameMatch = trimmed.match(/(?:mera\s+naam|my\s+name\s+is|i\s+am|i'm|naam\s+hai|main\s+hoon|naam\s+h|naam)\s+([A-Za-z\u0900-\u097F\s]{2,30})/i);
+      let detectedName = '';
+      if (nameMatch && nameMatch[1]) {
+        detectedName = nameMatch[1].replace(/(?:hai|hoon|ji|sir|madam)/gi, '').trim();
+      } else if (trimmed.split(/\s+/).length <= 4 && !/^(what|where|how|tell|list|which|details|pincode|village|tehsil|district|division|kon|kaun|kahan|kya)/i.test(trimmed)) {
+        detectedName = trimmed.replace(/^(i am|my name is|mera naam|naam|main)\s*/i, '').replace(/(?:hai|hoon|ji|sir|madam)/gi, '').trim();
+      }
+
+      if (detectedName && detectedName.length >= 2) {
+        this.hasCapturedName = true;
+        this.isAwaitingName = false;
+        this.userService.setUserName(detectedName);
+
+        // Append user message
+        this.messages.push({
+          id: 'usr-' + Date.now(),
+          sender: 'user',
+          text: q,
+          timestamp: new Date()
+        });
+        this.inputQuery = '';
+
+        // Respectful assistant response acknowledging name
+        setTimeout(() => {
+          this.messages.push({
+            id: 'bot-name-ack-' + Date.now(),
+            sender: 'assistant',
+            text: `बहुत-बहुत धन्यवाद **${detectedName} जी**! 🙏\n\nआपसे जुड़कर अत्यंत प्रसन्नता हुई।\n\nयह प्रोजेक्ट modern AI, LLM, LangGraph, Python FastAPI और Full-Stack आर्किटेक्चर की क्षमताओं को प्रदर्शित करने के लिए बनाया गया एक पोर्टफोलियो शोकेस है।\n\nअब आप राजस्थान के किसी भी जिले, तहसील, उपखंड, गांव, नगरीय निकाय या पिनकोड के बारे में कोई भी प्रश्न पूछ सकते हैं!`,
+            timestamp: new Date(),
+            intent: 'capability_query',
+            supportPhone: this.supportPhone
+          });
+        }, 300);
+        return;
+      } else {
+        // User asked a question directly, proceed with normal answering
+        this.isAwaitingName = false;
+      }
+    }
 
     // Append user message
     const userMsg: ChatMessage = {
@@ -529,7 +766,7 @@ export class ChatComponent implements OnInit, AfterViewChecked {
             const msg = this.messages.find(m => m.id === botMsgId);
             if (msg) {
               msg.isStreaming = false;
-              msg.text = `I encountered a connection issue while searching Rajasthan records. Please try again or call our helpline at ${this.supportPhone}.`;
+              msg.text = `I encountered a connection issue while searching the knowledge graph. Please try again or call our helpline at ${this.supportPhone}.`;
               msg.helplineCard = true;
               msg.supportPhone = this.supportPhone;
             }
@@ -541,10 +778,16 @@ export class ChatComponent implements OnInit, AfterViewChecked {
     );
   }
 
+  resetInactivityTimer(): void {
+    if (!this.isChatHidden) {
+      this.inactivitySecondsRemaining = 120;
+    }
+  }
+
   clearChat(): void {
     this.messages = [];
     this.sessionId = 'session-' + Math.random().toString(36).substring(2, 9);
-    this.loadCapabilities();
+    this.setupInitialGreeting();
   }
 
   private scrollToBottom(): void {

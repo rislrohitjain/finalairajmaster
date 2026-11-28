@@ -11,8 +11,8 @@ import { AuthService } from '../../services/auth.service';
   templateUrl: './admin-login.component.html'
 })
 export class AdminLoginComponent implements OnInit {
-  username: string = '8946919241';
-  password: string = '123456';
+  username: string = '';
+  password: string = '';
   errorMessage: string = '';
   sessionNotice: string = '';
   isLoading: boolean = false;
@@ -35,8 +35,7 @@ export class AdminLoginComponent implements OnInit {
   }
 
   fillDefaults(): void {
-    this.username = '8946919241';
-    this.password = '123456';
+    // Hidden per security preference
   }
 
   onLogin(event?: Event): void {
@@ -65,7 +64,7 @@ export class AdminLoginComponent implements OnInit {
       },
       error: (err) => {
         this.isLoading = false;
-        this.errorMessage = err.error?.detail || 'Invalid login credentials. Default: 8946919241 / 123456';
+        this.errorMessage = err.error?.detail || 'Invalid login credentials. Please check your username and password.';
       }
     });
   }

@@ -339,7 +339,7 @@ async def chat_endpoint(req: ChatRequest):
 
     # If in Hugging Face mode and agent had no response, use generate_chat_reply
     if not response_text and IS_HUGGINGFACE:
-        llm_messages = [{"role": "system", "content": "You are the official Rajasthan Geographic Master Assistant."}]
+        llm_messages = [{"role": "system", "content": "You are RajMaster AI, an educational portfolio showcase demonstrating LangGraph, multi-cloud LLM failover, and geographic hierarchy graphs."}]
         if doc_context:
             llm_messages.append({"role": "system", "content": f"Relevant Knowledge:\n{doc_context}"})
         llm_messages.extend(history_messages)

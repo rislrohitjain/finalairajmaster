@@ -21,12 +21,12 @@
             Jain Live Voice
           </h1>
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
-            LIVE
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5"></span>
+            LIVE VOICE ACTIVE
           </span>
         </div>
         <p class="text-[11px] text-slate-400 hidden sm:block">
-          Authentic Indian Female Vocal (Swara / Neerja) • Real-time Rajasthan Geo Master
+          Authentic Indian Female Vocal (Swara / Neerja) • Full-Stack AI & LLM Architecture Showcase
         </p>
       </div>
     </div>
@@ -134,13 +134,15 @@
           <!-- Inner Core Pulsing Halo -->
           <div class="absolute inset-0 bg-radial-gradient from-indigo-500/20 via-transparent to-transparent"></div>
 
-          <!-- Equalizer Audio Wave Bars (When Listening or Speaking) -->
+          <!-- Realistic Equalizer Audio Wave Bars (Reacting dynamically to audioLevel) -->
           <div *ngIf="voiceState === 'listening' || voiceState === 'speaking'" class="flex items-center space-x-1.5 h-12 mb-2 z-10">
-            <span class="w-1.5 bg-cyan-400 rounded-full animate-sound-bar" style="animation-delay: 0.1s; height: 18px;"></span>
-            <span class="w-1.5 bg-indigo-400 rounded-full animate-sound-bar" style="animation-delay: 0.3s; height: 32px;"></span>
-            <span class="w-1.5 bg-purple-400 rounded-full animate-sound-bar" style="animation-delay: 0.15s; height: 44px;"></span>
-            <span class="w-1.5 bg-amber-400 rounded-full animate-sound-bar" style="animation-delay: 0.4s; height: 30px;"></span>
-            <span class="w-1.5 bg-cyan-400 rounded-full animate-sound-bar" style="animation-delay: 0.25s; height: 16px;"></span>
+            <span class="w-1.5 bg-gradient-to-t from-cyan-500 to-cyan-300 rounded-full transition-all duration-100" [style.height.px]="14 + (audioLevel * 20)"></span>
+            <span class="w-1.5 bg-gradient-to-t from-blue-500 to-indigo-300 rounded-full transition-all duration-100" [style.height.px]="20 + (audioLevel * 30)"></span>
+            <span class="w-1.5 bg-gradient-to-t from-indigo-500 to-purple-300 rounded-full transition-all duration-100" [style.height.px]="26 + (audioLevel * 38)"></span>
+            <span class="w-1.5 bg-gradient-to-t from-purple-500 to-pink-300 rounded-full transition-all duration-100" [style.height.px]="32 + (audioLevel * 44)"></span>
+            <span class="w-1.5 bg-gradient-to-t from-indigo-500 to-purple-300 rounded-full transition-all duration-100" [style.height.px]="26 + (audioLevel * 38)"></span>
+            <span class="w-1.5 bg-gradient-to-t from-blue-500 to-indigo-300 rounded-full transition-all duration-100" [style.height.px]="20 + (audioLevel * 30)"></span>
+            <span class="w-1.5 bg-gradient-to-t from-cyan-500 to-cyan-300 rounded-full transition-all duration-100" [style.height.px]="14 + (audioLevel * 20)"></span>
           </div>
 
           <!-- Thinking Spinner Particles (When Thinking) -->
@@ -167,7 +169,7 @@
         {{ getStatusHeadline() }}
       </h2>
       <p class="text-xs sm:text-sm text-slate-400 font-medium">
-        Active Voice: <span class="text-orange-400 font-bold">{{ activeVoiceName }}</span> • 6-Tier Administrative Master
+        Active Voice: <span class="text-orange-400 font-bold">{{ activeVoiceName }}</span> • Full-Stack AI & LLM Architecture Showcase
       </p>
     </div>
 

@@ -439,43 +439,44 @@ FALLBACK_PINCODES = [
 
 async def init_models():
     """Create all tables in PostgreSQL, including pgvector extension and rag_support table"""
+    from sqlalchemy import text
     async with async_engine.begin() as conn:
         try:
-            from sqlalchemy import text
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-            await conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS rag_support (
-                    id SERIAL PRIMARY KEY,
-                    record_type VARCHAR(10) NOT NULL,
-                    session_id VARCHAR(100),
-                    role VARCHAR(20),
-                    content TEXT NOT NULL,
-                    embedding VECTOR(384),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """))
-            await conn.execute(text("""
-                CREATE INDEX IF NOT EXISTS idx_rag_support_embedding 
-                ON rag_support USING hnsw (embedding vector_cosine_ops);
-            """))
-            await conn.execute(text("""
-                CREATE INDEX IF NOT EXISTS idx_rag_support_type_session 
-                ON rag_support (record_type, session_id);
-            """))
-        except Exception as e:
+            async with conn.begin_nested():
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS rag_support (
+                        id SERIAL PRIMARY KEY,
+                        record_type VARCHAR(10) NOT NULL,
+                        session_id VARCHAR(100),
+                        role VARCHAR(20),
+                        content TEXT NOT NULL,
+                        embedding VECTOR(384),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_rag_support_embedding 
+                    ON rag_support USING hnsw (embedding vector_cosine_ops);
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_rag_support_type_session 
+                    ON rag_support (record_type, session_id);
+                """))
+        except Exception:
             # Fallback if vector extension is not available on local host
-            from sqlalchemy import text
-            await conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS rag_support (
-                    id SERIAL PRIMARY KEY,
-                    record_type VARCHAR(10) NOT NULL,
-                    session_id VARCHAR(100),
-                    role VARCHAR(20),
-                    content TEXT NOT NULL,
-                    embedding JSONB,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """))
+            async with conn.begin_nested():
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS rag_support (
+                        id SERIAL PRIMARY KEY,
+                        record_type VARCHAR(10) NOT NULL,
+                        session_id VARCHAR(100),
+                        role VARCHAR(20),
+                        content TEXT NOT NULL,
+                        embedding JSONB,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """))
         await conn.run_sync(Base.metadata.create_all)
     print("All PostgreSQL tables verified/created successfully.")
 
