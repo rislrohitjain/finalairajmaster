@@ -734,23 +734,41 @@ def build_chat_excel(
 
 
 # ---------------------------------------------------------------------------
-# PUBLIC CHAT EXPORT: UNICODE PDF (.pdf) WITH DEVANAGARI SHAPING
+# PUBLIC CHAT EXPORT: UNICODE PDF (.pdf) WITH DEVANAGARI SHAPING & FALLBACK
 # ---------------------------------------------------------------------------
 def _find_font_files() -> Dict[str, Optional[str]]:
     win_fonts = r"C:\Windows\Fonts"
+    linux_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    ]
+    linux_deva = [
+        "/usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+        "/usr/share/fonts/truetype/gargi/gargi.ttf",
+        "/usr/share/fonts/truetype/samyak-fonts/Samyak-Devanagari.ttf",
+    ]
     candidates = {
         "latin": [
             os.path.join(win_fonts, "NotoSans-VariableFont_wdth,wght.ttf"),
             os.path.join(win_fonts, "segoeui.ttf"),
             os.path.join(win_fonts, "arial.ttf"),
+            *linux_paths,
         ],
         "latin_bold": [
             os.path.join(win_fonts, "segoeuib.ttf"),
             os.path.join(win_fonts, "arialbd.ttf"),
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
         ],
         "devanagari": [
             os.path.join(win_fonts, "NotoSansDevanagari-Regular.ttf"),
             os.path.join(win_fonts, "Nirmala.ttc"),
+            *linux_deva,
         ],
     }
     res: Dict[str, Optional[str]] = {}
@@ -769,20 +787,72 @@ def _strip_unsupported_emoji(text: str) -> str:
         "📞": "[Call]", "✨": "*", "🔌": "[MCP]",
         "📚": "[RAG]", "🌐": "[Web]", "🔍": "[Search]",
         "🧭": "[Hierarchy]", "ℹ️": "[Info]", "🙏": "",
-        "👤": "[User]", "🛡️": "[Shield]",
+        "👤": "[User]", "🛡️": "[Shield]", "🟢": "[Active]",
+        "💡": "[Tip]", "⚡": "[Flow]", "⚠️": "[Alert]",
     }
     for em, sub in replacements.items():
         text = text.replace(em, sub)
-    # Strip remaining astral symbols (> U+FFFF) unsupported by Latin/Devanagari TTFs
+    # Strip remaining astral symbols (> U+FFFF) unsupported by standard TTFs
     return "".join(ch if ord(ch) <= 0xFFFF else "" for ch in text)
 
 
+def _safe_pdf_text(text: Any, is_unicode_font: bool = True) -> str:
+    if not text:
+        return ""
+    text = str(text)
+    # Normalize typographics outside Latin-1
+    text = text.replace("—", " - ").replace("–", " - ").replace("•", " * ")
+    text = text.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+    text = text.replace("…", "...").replace("™", "(TM)").replace("©", "(C)")
+    text = text.replace("➔", "->").replace("->", "->")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = _strip_unsupported_emoji(text)
+    if not is_unicode_font:
+        # Standard Helvetica only supports latin-1 (ord <= 255)
+        cleaned = []
+        for ch in text:
+            if ord(ch) <= 255:
+                cleaned.append(ch)
+            else:
+                cleaned.append(" ")
+        text = "".join(cleaned)
+    return text
+
+
+def _build_simple_fallback_pdf(session_id: str, messages: List[Dict[str, Any]], support_phone: str) -> bytes:
+    try:
+        pdf = FPDF(orientation="P", unit="mm", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("helvetica", "B", 14)
+        pdf.cell(0, 10, "RajMaster AI - Chat Transcript", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("helvetica", "", 9)
+        pdf.cell(0, 6, f"Session: {session_id} | Support Helpline: {support_phone}", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(5)
+        for idx, m in enumerate(messages, start=1):
+            sender = (m.get("sender") or "User").capitalize()
+            raw_txt = str(m.get("text") or "")
+            safe_txt = "".join(c if ord(c) < 128 else " " for c in raw_txt).strip()
+            pdf.set_font("helvetica", "B", 9)
+            pdf.cell(0, 6, f"#{idx} {sender}:", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("helvetica", "", 9)
+            pdf.multi_cell(0, 5, safe_txt or "-")
+            pdf.ln(3)
+        out = pdf.output()
+        return bytes(out) if isinstance(out, (bytes, bytearray)) else out.encode("latin1")
+    except Exception:
+        buf = io.BytesIO()
+        buf.write(b"%PDF-1.4\n% RajMaster AI Fallback\n")
+        return buf.getvalue()
+
+
 class _ChatPDF(FPDF):
-    def __init__(self, session_id: str, support_phone: str, main_font: str):
+    def __init__(self, session_id: str, support_phone: str, main_font: str, is_unicode: bool):
         super().__init__(orientation="P", unit="mm", format="A4")
         self.session_id = session_id
         self.support_phone = support_phone
         self.main_font = main_font
+        self.is_unicode = is_unicode
 
     def header(self):
         self.set_fill_color(30, 41, 59)  # Navy
@@ -793,7 +863,7 @@ class _ChatPDF(FPDF):
         self.set_xy(12, 4)
         self.set_text_color(255, 255, 255)
         self.set_font(self.main_font, "", 13)
-        self.cell(140, 7, "RajMaster AI — Rajasthan Geographic Master Transcript", new_x="RIGHT", new_y="TOP")
+        self.cell(140, 7, "RajMaster AI - Rajasthan Geographic Master Transcript", new_x="RIGHT", new_y="TOP")
 
         self.set_font(self.main_font, "", 8.5)
         self.set_text_color(254, 215, 170)
@@ -805,7 +875,7 @@ class _ChatPDF(FPDF):
         self.set_y(-12)
         self.set_font(self.main_font, "", 8)
         self.set_text_color(100, 116, 139)
-        self.cell(0, 8, f"Rajasthan Administrative & Geographic Support System  •  Page {self.page_no()}/{{nb}}", align="C")
+        self.cell(0, 8, f"Rajasthan Administrative & Geographic Support System  *  Page {self.page_no()}/{{nb}}", align="C")
 
 
 def build_chat_pdf(
@@ -815,88 +885,93 @@ def build_chat_pdf(
     support_phone: str = "89988555525",
 ) -> bytes:
     if not HAS_FPDF:
-        buf = io.BytesIO()
-        buf.write(b"%PDF-1.4\n% PDF export fallback\n")
-        return buf.getvalue()
-
-    fonts = _find_font_files()
-    main_font = "BodyFont" if fonts["latin"] else "helvetica"
-
-    pdf = _ChatPDF(session_id=session_id, support_phone=support_phone, main_font=main_font)
-    pdf.set_auto_page_break(auto=True, margin=18)
-    pdf.alias_nb_pages()
+        return _build_simple_fallback_pdf(session_id, messages, support_phone)
 
     try:
-        if fonts["latin"]:
-            pdf.add_font("BodyFont", "", fonts["latin"])
-        if fonts["devanagari"]:
-            pdf.add_font("DevaFont", "", fonts["devanagari"])
-            pdf.set_fallback_fonts(["DevaFont"])
-        pdf.set_text_shaping(use_shaping_engine=True)
-    except Exception:
-        # Fallback gracefully if shaping engine cannot load a system font
-        pdf.set_text_shaping(use_shaping_engine=False)
+        fonts = _find_font_files()
+        has_unicode = bool(fonts.get("latin") or fonts.get("devanagari"))
+        main_font = "BodyFont" if fonts.get("latin") else "helvetica"
 
-    pdf.add_page()
+        pdf = _ChatPDF(session_id=session_id, support_phone=support_phone, main_font=main_font, is_unicode=has_unicode)
+        pdf.set_auto_page_break(auto=True, margin=18)
+        pdf.alias_nb_pages()
 
-    # Summary strip box
-    user_cnt = sum(1 for m in messages if m.get("sender") == "user")
-    bot_cnt = len(messages) - user_cnt
-    pdf.set_fill_color(255, 247, 237)
-    pdf.set_draw_color(253, 186, 116)
-    pdf.rect(12, 27, 186, 12, "DF")
-    pdf.set_xy(15, 29.5)
-    pdf.set_font(main_font, "", 9.5)
-    pdf.set_text_color(154, 52, 18)
-    pdf.cell(
-        180,
-        7,
-        f"Conversation Summary   |   Messages: {len(messages)}   |   Questions: {user_cnt}   |   AI Replies: {bot_cnt}   |   Language: {language.upper()}",
-    )
-    pdf.set_y(44)
+        if fonts.get("latin"):
+            try:
+                pdf.add_font("BodyFont", "", fonts["latin"])
+            except Exception:
+                main_font = "helvetica"
+                pdf.main_font = "helvetica"
+                has_unicode = False
 
-    for idx, m in enumerate(messages, start=1):
-        sender_is_user = m.get("sender") == "user"
-        ts = _strip_unsupported_emoji(str(m.get("timestamp") or ""))
-        txt = _strip_unsupported_emoji(_clean_text(m.get("text"), max_len=8000)).strip()
-        crumbs = m.get("breadcrumbs") or []
-        intent_lbl = str(m.get("intent") or "").replace("_", " ").upper()
+        if fonts.get("devanagari"):
+            try:
+                pdf.add_font("DevaFont", "", fonts["devanagari"])
+                pdf.set_fallback_fonts(["DevaFont"])
+                pdf.set_text_shaping(use_shaping_engine=True)
+            except Exception:
+                pdf.set_text_shaping(use_shaping_engine=False)
 
-        if pdf.get_y() > 255:
-            pdf.add_page()
+        pdf.add_page()
 
-        # Sender badge row
-        if sender_is_user:
-            pdf.set_fill_color(234, 88, 12)
-            pdf.set_text_color(255, 255, 255)
-            header_lbl = f"  #{idx}  CITIZEN / USER   ({ts})" if ts else f"  #{idx}  CITIZEN / USER"
-        else:
-            pdf.set_fill_color(30, 41, 59)
-            pdf.set_text_color(255, 255, 255)
-            meta_tag = f"  [{intent_lbl}]" if intent_lbl else ""
-            header_lbl = f"  #{idx}  RAJMASTER AI ASSISTANT{meta_tag}   ({ts})" if ts else f"  #{idx}  RAJMASTER AI ASSISTANT{meta_tag}"
-
-        pdf.set_font(main_font, "", 9)
-        pdf.set_x(12)
-        pdf.cell(186, 6.5, header_lbl, fill=True, new_x="LMARGIN", new_y="NEXT")
-
-        # Breadcrumbs strip if present
-        if crumbs and isinstance(crumbs, list):
-            pdf.set_fill_color(241, 245, 249)
-            pdf.set_text_color(71, 85, 105)
-            pdf.set_font(main_font, "", 8)
-            pdf.set_x(12)
-            crumb_str = _strip_unsupported_emoji("  Hierarchy: " + " > ".join(str(c) for c in crumbs))
-            pdf.multi_cell(186, 5, crumb_str, fill=True, new_x="LMARGIN", new_y="NEXT")
-
-        # Message body
-        pdf.set_fill_color(255, 251, 235) if sender_is_user else pdf.set_fill_color(255, 255, 255)
-        pdf.set_draw_color(203, 213, 225)
-        pdf.set_text_color(15, 23, 42)
+        # Summary strip box
+        user_cnt = sum(1 for m in messages if m.get("sender") == "user")
+        bot_cnt = len(messages) - user_cnt
+        pdf.set_fill_color(255, 247, 237)
+        pdf.set_draw_color(253, 186, 116)
+        pdf.rect(12, 27, 186, 12, "DF")
+        pdf.set_xy(15, 29.5)
         pdf.set_font(main_font, "", 9.5)
-        pdf.set_x(12)
-        pdf.multi_cell(186, 5.4, txt or "-", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(3.5)
+        pdf.set_text_color(154, 52, 18)
+        summary_txt = f"Conversation Summary  |  Messages: {len(messages)}  |  Questions: {user_cnt}  |  AI Replies: {bot_cnt}  |  Language: {language.upper()}"
+        pdf.cell(180, 7, _safe_pdf_text(summary_txt, has_unicode))
+        pdf.set_y(44)
 
-    out = pdf.output()
-    return bytes(out) if isinstance(out, (bytes, bytearray)) else out.encode("latin1")
+        for idx, m in enumerate(messages, start=1):
+            sender_is_user = m.get("sender") == "user"
+            ts = _safe_pdf_text(str(m.get("timestamp") or ""), has_unicode)
+            raw_txt = _clean_text(m.get("text"), max_len=8000).strip()
+            txt = _safe_pdf_text(raw_txt, has_unicode)
+            crumbs = m.get("breadcrumbs") or []
+            intent_lbl = _safe_pdf_text(str(m.get("intent") or "").replace("_", " ").upper(), has_unicode)
+
+            if pdf.get_y() > 255:
+                pdf.add_page()
+
+            # Sender badge row
+            if sender_is_user:
+                pdf.set_fill_color(234, 88, 12)
+                pdf.set_text_color(255, 255, 255)
+                header_lbl = f"  #{idx}  CITIZEN / USER   ({ts})" if ts else f"  #{idx}  CITIZEN / USER"
+            else:
+                pdf.set_fill_color(30, 41, 59)
+                pdf.set_text_color(255, 255, 255)
+                meta_tag = f"  [{intent_lbl}]" if intent_lbl else ""
+                header_lbl = f"  #{idx}  RAJMASTER AI ASSISTANT{meta_tag}   ({ts})" if ts else f"  #{idx}  RAJMASTER AI ASSISTANT{meta_tag}"
+
+            pdf.set_font(main_font, "", 9)
+            pdf.set_x(12)
+            pdf.cell(186, 6.5, _safe_pdf_text(header_lbl, has_unicode), fill=True, new_x="LMARGIN", new_y="NEXT")
+
+            # Breadcrumbs strip if present
+            if crumbs and isinstance(crumbs, list):
+                pdf.set_fill_color(241, 245, 249)
+                pdf.set_text_color(71, 85, 105)
+                pdf.set_font(main_font, "", 8)
+                pdf.set_x(12)
+                crumb_str = _safe_pdf_text("  Hierarchy: " + " > ".join(str(c) for c in crumbs), has_unicode)
+                pdf.multi_cell(186, 5, crumb_str, fill=True, new_x="LMARGIN", new_y="NEXT")
+
+            # Message body
+            pdf.set_fill_color(255, 251, 235) if sender_is_user else pdf.set_fill_color(255, 255, 255)
+            pdf.set_draw_color(203, 213, 225)
+            pdf.set_text_color(15, 23, 42)
+            pdf.set_font(main_font, "", 9.5)
+            pdf.set_x(12)
+            pdf.multi_cell(186, 5.4, txt or "-", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(3.5)
+
+        out = pdf.output()
+        return bytes(out) if isinstance(out, (bytes, bytearray)) else out.encode("latin1")
+    except Exception as e:
+        return _build_simple_fallback_pdf(session_id, messages, support_phone)

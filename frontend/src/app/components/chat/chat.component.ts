@@ -31,7 +31,6 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     'Tell me about Muhana village administrative hierarchy',
     'Which division does Balotra district belong to?',
     'Details of pincode 302029',
-    'Show database stats via MCP',
     'Who heads Sanganer tehsil and panchayat samiti?',
     'List all 10 divisions of Rajasthan',
     'What urban local body covers Malviya Nagar, Jaipur?'
@@ -276,6 +275,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   isAwaitingName: boolean = true;
   hasCapturedName: boolean = false;
 
+  // --- Smart Chat Scroll State (only auto-scroll on new messages when not scrolled up) ---
+  userScrolledUp: boolean = false;
+  private pendingScrollToBottom: boolean = false;
+
   constructor(
     public chatService: ChatService,
     public auth: AuthService,
@@ -285,6 +288,26 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   setViewMode(msg: ChatMessage, mode: 'preview' | 'raw'): void {
     msg.viewMode = mode;
+  }
+
+  getAgentTypingLabel(): string {
+    if (this.selectedLanguage === 'hi') {
+      return 'एजेंट जैन टाइप कर रहे हैं...';
+    }
+    if (this.selectedLanguage === 'hinglish') {
+      return "Agent Jain's type kar rahe hain...";
+    }
+    return "Agent Jain's is typing...";
+  }
+
+  getAgentThinkingLabel(): string {
+    if (this.selectedLanguage === 'hi') {
+      return 'एजेंट जैन सोच रहे हैं और जवाब लिख रहे हैं...';
+    }
+    if (this.selectedLanguage === 'hinglish') {
+      return "Agent Jain's soch rahe hain aur jawaab likh rahe hain...";
+    }
+    return "Agent Jain's is thinking & typing...";
   }
 
   copyToClipboard(text: string, msgId: string): void {
@@ -365,8 +388,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     // 7. Italic
     text = text.replace(/\*([^*]+)\*/g, '<em class="italic text-slate-800">$1</em>');
 
-    // 8. Markdown Links
-    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-orange-600 font-bold hover:underline inline-flex items-center space-x-0.5" target="_blank" rel="noopener noreferrer"><span>$1</span></a>');
+    // 8. Markdown Links (allow strictly https, http, and tel schemes to block javascript:/data: XSS)
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, rawUrl: string) => {
+      const trimmed = (rawUrl || '').trim();
+      const safeUrl = /^(https?:\/\/|tel:)/i.test(trimmed) ? trimmed.replace(/"/g, '&quot;') : '#';
+      if (safeUrl === '#') {
+        return label;
+      }
+      return `<a href="${safeUrl}" class="text-orange-600 font-bold hover:underline inline-flex items-center space-x-0.5" target="_blank" rel="noopener noreferrer"><span>${label}</span></a>`;
+    });
 
     // 9. Numbered lists
     text = text.replace(/^(\d+)\.\s+(.*$)/gim, '<div class="flex items-start space-x-2 my-1 pl-1"><span class="w-4 h-4 rounded-full bg-orange-100 text-orange-800 text-[10px] font-extrabold flex items-center justify-center shrink-0 mt-0.5">$1</span><span class="text-xs sm:text-sm text-slate-800 leading-relaxed">$2</span></div>');
@@ -665,14 +695,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     const userName = (user?.name || this.userService.guestName() || '').trim();
 
     let greetingText = '';
+    const learningNote = `\n\nℹ️ *For Learning Purpose Only: Dummy/sample entries in this portal are strictly for demonstrating knowledge and system architecture, not all live/complete official data.*`;
     if (userName) {
       this.isAwaitingName = false;
       this.hasCapturedName = true;
-      greetingText = `नमस्ते **${userName} जी**! 🙏\n\nWelcome to this **Full-Stack AI & LLM Engineering Portfolio Showcase** (Demonstrating LangGraph, Multi-Cloud LLMs, Python FastAPI, and PostgreSQL Hierarchy).\n\nआप राजस्थान के किसी भी जिले, तहसील, उपखंड, गांव, नगरीय निकाय या 6-डिजिट पिनकोड के बारे में पूछ सकते हैं। How may I assist you today?`;
+      greetingText = `नमस्ते **${userName} जी**! 🙏\n\nWelcome to this **Full-Stack AI & LLM Engineering Portfolio Showcase** (Demonstrating LangGraph, Multi-Cloud LLMs, Python FastAPI, and PostgreSQL Hierarchy).${learningNote}\n\nआप राजस्थान के किसी भी जिले, तहसील, उपखंड, गांव, नगरीय निकाय या 6-डिजिट पिनकोड के बारे में पूछ सकते हैं। How may I assist you today?`;
     } else {
       this.isAwaitingName = true;
       this.hasCapturedName = false;
-      greetingText = `नमस्ते! 🙏\n\nWelcome to this **Full-Stack AI & LLM Architecture Portfolio Showcase** (Demonstrating LangGraph Multi-Agent Workflows, Multi-Cloud LLM Failovers, Python FastAPI, and PostgreSQL Vector RAG).\n\nबातचीत शुरू करने से पहले, क्या मैं आदरपूर्वक आपका **शुभ नाम** जान सकता हूँ? 🙏\n*(Before we proceed, may I respectfully know your good name?)*`;
+      greetingText = `नमस्ते! 🙏\n\nWelcome to this **Full-Stack AI & LLM Architecture Portfolio Showcase** (Demonstrating LangGraph Multi-Agent Workflows, Multi-Cloud LLM Failovers, Python FastAPI, and PostgreSQL Vector RAG).${learningNote}\n\nबातचीत शुरू करने से पहले, क्या मैं आदरपूर्वक आपका **शुभ नाम** जान सकता हूँ? 🙏\n*(Before we proceed, may I respectfully know your good name?)*`;
     }
 
     if (this.messages.length === 0) {
@@ -684,6 +715,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         intent: 'capability_query',
         supportPhone: this.supportPhone
       });
+      this.pendingScrollToBottom = true;
     }
   }
 
@@ -693,12 +725,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.isAwaitingName = false;
     const initMsg = this.messages.find(m => m.id === 'init-msg' || m.id === 'init-fallback');
     if (initMsg) {
-      initMsg.text = `नमस्ते **${name} जी**! 🙏\n\nWelcome to this **Full-Stack AI & LLM Engineering Portfolio Showcase**.\n\nDemonstrating LangGraph multi-agent orchestration, multi-cloud LLM routing, and PostgreSQL Vector RAG across Rajasthan's 10 divisions, 50 districts, tehsils, and pincodes. How may I assist you today?`;
+      initMsg.text = `नमस्ते **${name} जी**! 🙏\n\nWelcome to this **Full-Stack AI & LLM Engineering Portfolio Showcase**.\n\nℹ️ *For Learning Purpose Only: Dummy/sample entries in this portal are strictly for demonstrating knowledge and system architecture, not all live/complete official data.*\n\nDemonstrating LangGraph multi-agent orchestration, multi-cloud LLM routing, and PostgreSQL Vector RAG across Rajasthan's 10 divisions, 50 districts, tehsils, and pincodes. How may I assist you today?`;
     }
   }
 
   ngAfterViewChecked(): void {
-    this.scrollToBottom();
+    if (this.pendingScrollToBottom) {
+      this.pendingScrollToBottom = false;
+      this.scrollToBottom();
+    }
   }
 
   loadCapabilities(): void {
@@ -852,10 +887,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       isStreaming: true,
       viewMode: 'preview',
       pipelineSteps: [],
-      stepsExpanded: true
+      stepsExpanded: false
     };
     this.messages.push(botMsg);
     this.isStreaming = true;
+    this.userScrolledUp = false;
+    this.pendingScrollToBottom = true;
 
     this.chatService.streamMessage(
       this.sessionId,
@@ -864,6 +901,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         const msg = this.messages.find(m => m.id === botMsgId);
         if (msg) {
           msg.text += token.replace(/\*\*/g, '');
+          if (!this.userScrolledUp) {
+            this.pendingScrollToBottom = true;
+          }
         }
       },
       (meta: any) => {
@@ -888,6 +928,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
           }
         }
         this.isStreaming = false;
+        if (!this.userScrolledUp) {
+          this.pendingScrollToBottom = true;
+        }
       },
       (err: any) => {
         console.warn('Streaming error, falling back to standard POST /api/chat:', err);
@@ -914,6 +957,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
               }
             }
             this.isStreaming = false;
+            if (!this.userScrolledUp) {
+              this.pendingScrollToBottom = true;
+            }
           },
           error: (fallbackErr) => {
             console.error('Chat fallback error:', fallbackErr);
@@ -925,6 +971,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
               msg.supportPhone = this.supportPhone;
             }
             this.isStreaming = false;
+            if (!this.userScrolledUp) {
+              this.pendingScrollToBottom = true;
+            }
           }
         });
       },
@@ -996,10 +1045,133 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       },
       error: (err) => {
         this.isExportingChat = null;
-        console.error(`Chat ${format} export failed:`, err);
-        alert(`Failed to export chat as ${format.toUpperCase()}. Please try again.`);
+        console.warn(`Chat ${format} export API failed, using instant client-side export:`, err);
+        if (format === 'pdf') {
+          this.exportChatClientPdf();
+        } else {
+          this.exportChatClientCsv();
+        }
       }
     });
+  }
+
+  exportChatClientPdf(): void {
+    const title = `RajMaster AI Chat Transcript - ${this.sessionId}`;
+    const dateStr = new Date().toLocaleString();
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+      <style>
+        body { font-family: system-ui, -apple-system, sans-serif; margin: 24px; color: #1e293b; background: #fff; }
+        .header { background: #1e293b; color: white; padding: 18px 24px; border-radius: 12px; border-bottom: 4px solid #ea580c; }
+        .header h1 { margin: 0; font-size: 20px; font-weight: 800; }
+        .header p { margin: 6px 0 0; font-size: 12px; color: #fed7aa; }
+        .meta { margin: 18px 0; padding: 12px 16px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; font-size: 12px; color: #9a3412; }
+        .msg { margin-bottom: 16px; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; page-break-inside: avoid; }
+        .msg-header { padding: 8px 14px; font-size: 11px; font-weight: bold; color: white; display: flex; justify-content: space-between; align-items: center; }
+        .user-header { background: #ea580c; }
+        .bot-header { background: #1e293b; }
+        .msg-body { padding: 14px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; background: white; word-break: break-word; }
+        .user-body { background: #fffdf5; }
+        .footer { margin-top: 32px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 14px; }
+        @media print {
+          body { margin: 0; }
+          .no-print { display: none; }
+        }
+      </style>
+    </head><body>
+      <div class="header">
+        <h1>RajMaster AI — Full-Stack AI & LLM Systems Portfolio</h1>
+        <p>Session ID: ${this.sessionId} • Exported: ${dateStr} • Helpline: ${this.supportPhone}</p>
+      </div>
+      <div class="meta">
+        <strong>Conversation Summary:</strong> Total Messages: ${this.messages.length} • Language: ${this.selectedLanguage.toUpperCase()} • Lead AI Engineer: Rohit Jain (<a href="https://rohitjain-resume.vercel.app/" target="_blank">Portfolio & Resume</a>)
+      </div>
+    `;
+
+    this.messages.forEach((m, idx) => {
+      const isUser = m.sender === 'user';
+      const senderTitle = isUser ? 'Citizen / User' : 'RajMaster AI Assistant';
+      const headerClass = isUser ? 'user-header' : 'bot-header';
+      const bodyClass = isUser ? 'user-body' : '';
+      const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '';
+      const intentTag = m.intent ? ` [${m.intent.replace('_', ' ').toUpperCase()}]` : '';
+      html += `
+        <div class="msg">
+          <div class="msg-header ${headerClass}">
+            <span>#${idx + 1} ${senderTitle}${intentTag}</span>
+            <span>${time}</span>
+          </div>
+          <div class="msg-body ${bodyClass}">${m.text || ''}</div>
+        </div>
+      `;
+    });
+
+    html += `
+      <div class="footer">
+        RajMaster AI Administrative & Geographic Support System • Engineered by Rohit Jain • <a href="https://rohitjain-resume.vercel.app/">https://rohitjain-resume.vercel.app/</a>
+      </div>
+      <script>
+        window.onload = function() { window.print(); };
+      </script>
+    </body></html>`;
+
+    const printWin = window.open('', '_blank');
+    if (printWin) {
+      printWin.document.open();
+      printWin.document.write(html);
+      printWin.document.close();
+    } else {
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rajmaster_chat_${this.sessionId}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }
+  }
+
+  exportChatClientCsv(): void {
+    let csv = "Index,Sender,Time,Intent,Message\n";
+    this.messages.forEach((m, idx) => {
+      const sender = m.sender === 'user' ? 'Citizen' : 'RajMaster AI';
+      const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '';
+      const intent = (m.intent || '').replace(/"/g, '""');
+      const text = (m.text || '').replace(/"/g, '""').replace(/\n/g, ' ');
+      csv += `${idx + 1},"${sender}","${time}","${intent}","${text}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rajmaster_chat_${this.sessionId}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }
+
+  onChatWheel(event: WheelEvent): void {
+    if (event.deltaY < 0) {
+      this.userScrolledUp = true;
+      this.pendingScrollToBottom = false;
+    }
+  }
+
+  onChatScroll(): void {
+    try {
+      const el = this.scrollContainer?.nativeElement;
+      if (!el) return;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      this.userScrolledUp = distanceFromBottom > 24;
+    } catch (err) {}
+  }
+
+  jumpToBottom(): void {
+    this.userScrolledUp = false;
+    this.pendingScrollToBottom = true;
+    this.scrollToBottom();
   }
 
   private scrollToBottom(): void {

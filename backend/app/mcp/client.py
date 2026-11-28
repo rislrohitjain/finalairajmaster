@@ -224,27 +224,24 @@ class MCPPostgresClient:
             return resp.get("result", {}).get("tools", MCP_TOOLS)
 
     async def health_check(self) -> Dict[str, Any]:
-        """Verifies live MCP protocol readiness and database statistics."""
+        """Verifies live MCP protocol readiness without exposing internal schema/table counts publicly."""
         try:
             tools = await self.list_tools()
-            stats_res = await self.call_tool("get_database_stats", {})
+            probe = await self.call_tool("get_administrative_lineage", {"entity_name_or_pincode": "Jaipur"})
             return {
-                "status": "online" if stats_res.get("ok") else "degraded",
+                "status": "online" if probe.get("ok") else "degraded",
                 "server": self._server_info,
-                "transport": stats_res.get("transport", "inprocess-jsonrpc"),
+                "transport": probe.get("transport", "inprocess-jsonrpc"),
                 "tools_count": len(tools),
-                "tools": [t["name"] for t in tools],
-                "database_summary": (stats_res.get("data") or {}).get("summary", {}),
-                "error": stats_res.get("error"),
+                "error": probe.get("error"),
             }
         except Exception as e:
             return {
                 "status": "offline",
                 "server": self._server_info,
                 "transport": "unavailable",
-                "tools_count": len(MCP_TOOLS),
-                "tools": [t["name"] for t in MCP_TOOLS],
-                "error": str(e),
+                "tools_count": 0,
+                "error": "MCP unavailable",
             }
 
     async def close(self) -> None:

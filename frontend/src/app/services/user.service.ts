@@ -44,8 +44,9 @@ export class UserService {
     try {
       const parts = token.split('.');
       if (parts.length !== 3) return false;
-      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(atob(base64));
+      const base64Url = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64Url.padEnd(base64Url.length + ((4 - (base64Url.length % 4)) % 4), '=');
+      const payload = JSON.parse(atob(padded));
       if (!payload.sub) return false;
       if (payload.exp && payload.exp * 1000 <= Date.now()) return false;
       return true;

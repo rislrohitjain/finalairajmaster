@@ -173,7 +173,7 @@ async def get_llm_config(current_admin: Admin = Depends(get_current_admin)):
                     "rag_top_k": cfg.rag_top_k or 5,
                     "enable_web_search": cfg.enable_web_search if cfg.enable_web_search is not None else True,
                     "web_search_provider": cfg.web_search_provider or "duckduckgo",
-                    "web_search_api_key": cfg.web_search_api_key or "",
+                    "web_search_api_key": ("••••" + cfg.web_search_api_key[-4:]) if cfg.web_search_api_key else "",
                     "web_search_max_results": cfg.web_search_max_results or 4,
                     "available_models": available_models,
                     "ollama_base_url": settings.OLLAMA_BASE_URL
@@ -187,6 +187,11 @@ async def get_llm_config(current_admin: Admin = Depends(get_current_admin)):
 async def update_llm_config(req: LLMConfigUpdateRequest, current_admin: Admin = Depends(get_current_admin)):
     try:
         async with AsyncSessionLocal() as session:
+            existing_res = await session.execute(select(LLMSetting).where(LLMSetting.id == 1))
+            existing_cfg = existing_res.scalar_one_or_none()
+            new_web_key = req.web_search_api_key or ""
+            if new_web_key.startswith("••••") and existing_cfg:
+                new_web_key = existing_cfg.web_search_api_key or ""
             stmt = (
                 update(LLMSetting)
                 .where(LLMSetting.id == 1)
@@ -201,7 +206,7 @@ async def update_llm_config(req: LLMConfigUpdateRequest, current_admin: Admin = 
                     rag_top_k=req.rag_top_k,
                     enable_web_search=req.enable_web_search,
                     web_search_provider=req.web_search_provider,
-                    web_search_api_key=req.web_search_api_key or "",
+                    web_search_api_key=new_web_key,
                     web_search_max_results=req.web_search_max_results,
                     updated_at=datetime.now(timezone.utc)
                 )

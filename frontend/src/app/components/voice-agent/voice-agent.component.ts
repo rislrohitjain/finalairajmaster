@@ -28,10 +28,20 @@ export class VoiceAgentComponent implements OnInit, OnDestroy {
   nextExpectedQuestions: string[] = [];
   pipelineSteps: PipelineStep[] = [];
   isResponseStreaming: boolean = false;
-  showStepsPanel: boolean = true;
+  showStepsPanel: boolean = false;
   lastLatencyMs: number | null = null;
   mcpUsed: boolean = false;
   mcpTool: string = '';
+
+  getVoiceTypingLabel(): string {
+    if (this.currentLanguage === 'hi') {
+      return 'एजेंट जैन लाइव टाइप कर रहे हैं...';
+    }
+    if (this.currentLanguage === 'hinglish') {
+      return "Agent Jain's live type kar rahe hain...";
+    }
+    return "Agent Jain's is typing live...";
+  }
 
   // Controls
   isMicMuted: boolean = false;
@@ -180,7 +190,7 @@ export class VoiceAgentComponent implements OnInit, OnDestroy {
     this.agentSpokenText = '';
     this.agentFullResponse = '';
     this.isResponseStreaming = true;
-    this.showStepsPanel = true;
+    this.showStepsPanel = false;
     this.lastLatencyMs = null;
     this.mcpUsed = false;
     this.mcpTool = '';

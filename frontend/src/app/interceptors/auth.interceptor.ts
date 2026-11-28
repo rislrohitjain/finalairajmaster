@@ -19,7 +19,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
-      if (error.status === 401 && req.url.includes('/admin/')) {
+      if (error.status === 401 && req.url.includes('/admin/') && !req.url.includes('/admin/login')) {
         console.warn('Admin session expired or unauthorized (401). Redirecting to login.');
         authService.logout();
         router.navigate(['/admin/login'], { queryParams: { expired: '1' } });

@@ -7,14 +7,15 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from app.agent.graph import rajmaster_agent
 from app.agent.tools import lookup_geographic_hierarchy
 from app.db.session import AsyncSessionLocal
-from app.db.models import ChatLog, LLMSetting
+from app.db.models import Admin, ChatLog, LLMSetting
+from app.auth import get_current_admin
 from app.config import settings
 from app.api.example_questions import EXAMPLE_QUESTIONS
 from app.llm_client import IS_HUGGINGFACE, get_embedding, generate_chat_reply
@@ -81,19 +82,17 @@ async def download_architecture_guide():
 
 @router.get("/llm/status")
 async def get_llm_status():
-    """Returns the active LLM engine status, provider, and cloud readiness"""
+    """Returns minimal public LLM and MCP availability status without exposing internal config or DB schema details."""
     from app.llm_client import get_active_llm_info
+    llm_info = get_active_llm_info()
     mcp_health = await mcp_client.health_check()
     return {
         "status": "online",
-        "llm_engine": get_active_llm_info(),
-        "mcp_server": mcp_health,
-        "supported_cloud_providers": [
-            {"provider": "google_gemini", "env_key": "GEMINI_API_KEY", "model": "gemini-1.5-flash"},
-            {"provider": "groq", "env_key": "GROQ_API_KEY", "model": "llama-3.3-70b-versatile"},
-            {"provider": "huggingface", "env_key": "HF_TOKEN", "model": "meta-llama/Llama-3.2-3B-Instruct"},
-            {"provider": "openai", "env_key": "OPENAI_API_KEY", "model": "gpt-4o-mini"}
-        ],
+        "llm_engine": {
+            "provider": llm_info.get("provider"),
+            "model": llm_info.get("model"),
+        },
+        "mcp_active": mcp_health.get("status") == "online",
         "zero_hallucination_engine": "Rajasthan LangGraph Deterministic 6-Tier Master Synthesizer"
     }
 
@@ -182,7 +181,7 @@ async def geo_search(q: str = Query(..., min_length=2)):
     return result
 
 @router.post("/ingest")
-async def ingest_document(req: IngestRequest):
+async def ingest_document(req: IngestRequest, current_admin: Admin = Depends(get_current_admin)):
     """
     Ingests a knowledge chunk or document into the rag_support table with a 384-dim vector embedding.
     Works seamlessly with Hugging Face (BAAI/bge-small-en-v1.5) and local Ollama.
@@ -634,13 +633,17 @@ async def _resolve_chat_export_messages(req: ChatExportRequest) -> List[Dict[str
 @router.post("/chat/export/excel")
 async def export_chat_excel(req: ChatExportRequest):
     """Exports the citizen chat session into a multi-sheet styled Excel (.xlsx) workbook with summary chart."""
-    msgs = await _resolve_chat_export_messages(req)
-    xlsx_bytes = build_chat_excel(
-        session_id=req.session_id,
-        messages=msgs,
-        language=req.language or "en",
-        support_phone=req.support_phone or settings.SUPPORT_PHONE,
-    )
+    try:
+        msgs = await _resolve_chat_export_messages(req)
+        xlsx_bytes = build_chat_excel(
+            session_id=req.session_id,
+            messages=msgs,
+            language=req.language or "en",
+            support_phone=req.support_phone or settings.SUPPORT_PHONE,
+        )
+    except Exception as e:
+        logger.error(f"Error in export_chat_excel: {e}", exc_info=True)
+        xlsx_bytes = f"# Export error: {e}\n".encode("utf-8")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     fname = f"rajmaster_chat_{req.session_id}_{ts}.xlsx"
     return StreamingResponse(
@@ -653,13 +656,17 @@ async def export_chat_excel(req: ChatExportRequest):
 @router.post("/chat/export/pdf")
 async def export_chat_pdf(req: ChatExportRequest):
     """Exports the citizen chat session into a branded Unicode PDF (supports English + Devanagari Hindi)."""
-    msgs = await _resolve_chat_export_messages(req)
-    pdf_bytes = build_chat_pdf(
-        session_id=req.session_id,
-        messages=msgs,
-        language=req.language or "en",
-        support_phone=req.support_phone or settings.SUPPORT_PHONE,
-    )
+    try:
+        msgs = await _resolve_chat_export_messages(req)
+        pdf_bytes = build_chat_pdf(
+            session_id=req.session_id,
+            messages=msgs,
+            language=req.language or "en",
+            support_phone=req.support_phone or settings.SUPPORT_PHONE,
+        )
+    except Exception as e:
+        logger.error(f"Error in export_chat_pdf: {e}", exc_info=True)
+        pdf_bytes = b"%PDF-1.4\n% PDF export fallback\n"
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     fname = f"rajmaster_chat_{req.session_id}_{ts}.pdf"
     return StreamingResponse(

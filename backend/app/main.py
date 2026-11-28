@@ -45,13 +45,25 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+import os
+
 # CORS configuration for frontend
+_extra_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+_allowed_origins = [
+    "http://localhost:4200",
+    "http://127.0.0.1:4200",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    *_extra_origins,
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://[a-zA-Z0-9-]+\.vercel\.app$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Include Routers
@@ -109,7 +121,5 @@ async def root():
 async def health_check():
     return {
         "status": "healthy",
-        "database": settings.DB_NAME,
-        "ollama_url": settings.OLLAMA_BASE_URL,
         "support_phone": settings.SUPPORT_PHONE
     }

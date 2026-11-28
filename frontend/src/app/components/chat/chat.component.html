@@ -1,10 +1,10 @@
-<div class="flex h-screen w-full bg-slate-100 overflow-hidden font-sans">
+<div class="flex h-full w-full bg-slate-100 overflow-hidden font-sans">
   <!-- Mobile Sidebar Overlay -->
   <div *ngIf="isSidebarOpen" (click)="toggleSidebar()" class="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden"></div>
 
   <!-- Sidebar / Drawer -->
   <aside [class.translate-x-0]="isSidebarOpen" [class.-translate-x-full]="!isSidebarOpen"
-         class="fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 shadow-lg lg:shadow-none">
+         class="fixed inset-y-0 left-0 z-50 w-80 h-full min-h-0 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 shadow-lg lg:shadow-none">
     
     <!-- Sidebar Header -->
     <div class="p-4 border-b border-slate-200 bg-gradient-to-r from-orange-600 to-amber-600 text-white flex items-center justify-between">
@@ -236,24 +236,25 @@
   </aside>
 
   <!-- Main Chat Area -->
-  <main class="flex-1 flex flex-col h-full bg-slate-50">
-    <!-- Top Navigation Bar -->
-    <header class="h-16 bg-white border-b border-slate-200 px-4 flex items-center justify-between shadow-sm z-10">
-      <div class="flex items-center space-x-3">
-        <button (click)="toggleSidebar()" class="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 focus:outline-none">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  <main class="flex-1 flex flex-col h-full min-h-0 min-w-0 bg-slate-50 overflow-hidden">
+    <!-- Top Navigation Bar (Desktop full bar, Mobile sleek bar + scrollable quick-actions strip) -->
+    <header class="h-14 sm:h-16 bg-white border-b border-slate-200 px-3 sm:px-4 flex items-center justify-between shadow-sm z-10 shrink-0">
+      <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
+        <button (click)="toggleSidebar()" aria-label="Open Menu" class="lg:hidden p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 focus:outline-none shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
 
-        <div class="flex items-center space-x-2.5">
-          <div class="relative">
-            <div class="w-9 h-9 rounded-xl overflow-hidden border border-orange-300 shadow bg-white flex items-center justify-center">
+        <div class="flex items-center space-x-2 min-w-0">
+          <div class="relative shrink-0">
+            <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden border border-orange-300 shadow bg-white flex items-center justify-center">
               <img src="avatar.png" onerror="this.onerror=null;this.src='avatar.svg';" alt="RajMaster Avatar" class="w-full h-full object-cover" />
             </div>
-            <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
+            <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
           </div>
-          <div>
+          <div class="min-w-0">
             <div class="font-bold text-slate-900 text-sm sm:text-base flex items-center space-x-2">
-              <span>Rajasthan Geographic Master</span>
+              <span class="truncate hidden sm:inline">Rajasthan Geographic Master</span>
+              <span class="truncate sm:hidden">RajMaster AI</span>
               <!-- Stable, sleek, non-blinking AI status badge (Req 1) -->
               <span class="hidden sm:inline-flex items-center space-x-1.5 text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full shadow-2xs whitespace-nowrap shrink-0">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -261,20 +262,42 @@
               </span>
               <span *ngIf="mcpStatus?.status === 'online'"
                     [title]="'MCP Server: ' + (mcpStatus?.server?.name || 'postgres-mcp') + ' (' + (mcpStatus?.transport || 'jsonrpc') + ')'"
-                    class="hidden md:inline-flex items-center space-x-1 text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 px-2.5 py-0.5 rounded-full shadow-2xs whitespace-nowrap shrink-0">
+                    class="hidden xl:inline-flex items-center space-x-1 text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 px-2.5 py-0.5 rounded-full shadow-2xs whitespace-nowrap shrink-0">
                 <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
                 <span>🔌 MCP Active</span>
               </span>
             </div>
-            <div class="text-[11px] text-slate-500">
+            <div class="text-[10px] sm:text-[11px] text-slate-500 truncate">
               Welcome here chat with Jain's only
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Right Action Items -->
-      <div class="flex items-center space-x-1 sm:space-x-2">
+      <!-- Compact Mobile Top-Right Quick Controls (< lg) -->
+      <div class="flex lg:hidden items-center space-x-1.5 shrink-0">
+        <button type="button" (click)="toggleChatPrivacy()"
+                [ngClass]="isChatHidden ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-700 border-slate-300'"
+                class="px-2 py-1.5 rounded-xl border text-[11px] font-bold flex items-center space-x-1 cursor-pointer"
+                title="WhatsApp-style Privacy Lock">
+          <span>{{ isChatHidden ? '🔓' : '🛡️' }}</span>
+          <span class="font-mono text-[10px]">{{ formattedInactivityTime }}</span>
+        </button>
+
+        <button type="button" (click)="openVoiceAgent()"
+                class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-extrabold text-[11px] shadow-sm cursor-pointer">
+          <span>✨</span>
+          <span>Voice</span>
+        </button>
+
+        <button type="button" (click)="openQuestionsModal()"
+                class="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-[11px] shadow-sm cursor-pointer">
+          💡 101
+        </button>
+      </div>
+
+      <!-- Full Desktop Action Items (>= lg) -->
+      <div class="hidden lg:flex items-center space-x-1.5">
         <!-- WhatsApp-Style Privacy Shield Button + Auto-Hide Selector (Req 7) -->
         <div class="flex items-center rounded-xl border border-slate-300 bg-white shadow-2xs overflow-hidden">
           <button type="button" (click)="toggleChatPrivacy()"
@@ -329,12 +352,11 @@
           </button>
         </div>
 
-        <!-- Jain Live Voice Agent Trigger Button (Header - Stable no pulse) -->
+        <!-- Jain Live Voice Agent Trigger Button -->
         <button type="button" (click)="openVoiceAgent()"
                 class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-extrabold text-xs shadow-md hover:shadow-indigo-500/30 transition-all cursor-pointer group">
           <span class="text-sm group-hover:scale-125 transition-transform">✨</span>
-          <span class="hidden sm:inline">Jain Live Voice</span>
-          <span class="sm:hidden">Voice</span>
+          <span>Jain Live Voice</span>
           <span class="bg-white/25 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-wider">TALK</span>
         </button>
 
@@ -343,7 +365,7 @@
            title="Open Rohit Jain Resume & Contact Website"
            class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-all shadow-2xs cursor-pointer group">
           <span class="text-sm">👨‍💻</span>
-          <span class="hidden sm:inline">Resume</span>
+          <span>Resume</span>
           <span class="text-[10px] text-amber-300">↗</span>
         </a>
 
@@ -351,8 +373,7 @@
         <button type="button" (click)="openAboutModal()"
                 class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-900 font-bold text-xs transition-all shadow-2xs cursor-pointer group">
           <span class="text-sm">ℹ️</span>
-          <span class="hidden sm:inline">About / उद्देश्य</span>
-          <span class="sm:hidden">About</span>
+          <span>About / उद्देश्य</span>
         </button>
 
         <!-- Export Chat Transcript Buttons (Excel & PDF) -->
@@ -361,13 +382,13 @@
                   title="Export Chat Conversation as Styled Excel (.xlsx)"
                   class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs transition-all shadow-2xs cursor-pointer disabled:opacity-50">
             <span>📊</span>
-            <span class="hidden md:inline">{{ isExportingChat === 'excel' ? 'Exporting...' : 'Excel' }}</span>
+            <span>{{ isExportingChat === 'excel' ? 'Exporting...' : 'Excel' }}</span>
           </button>
           <button type="button" (click)="exportChat('pdf')" [disabled]="isExportingChat !== null"
                   title="Export Chat Conversation as PDF (.pdf)"
                   class="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold text-xs transition-all shadow-2xs cursor-pointer disabled:opacity-50">
             <span>📄</span>
-            <span class="hidden md:inline">{{ isExportingChat === 'pdf' ? 'Exporting...' : 'PDF' }}</span>
+            <span>{{ isExportingChat === 'pdf' ? 'Exporting...' : 'PDF' }}</span>
           </button>
         </div>
 
@@ -375,8 +396,7 @@
         <button type="button" (click)="openQuestionsModal()" 
                 class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-xs shadow-sm hover:shadow transition-all group cursor-pointer">
           <svg class="w-4 h-4 text-amber-100 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span class="hidden sm:inline">100+ Questions</span>
-          <span class="sm:hidden">Examples</span>
+          <span>100+ Questions</span>
           <span class="bg-white/20 text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full">101</span>
         </button>
 
@@ -390,7 +410,7 @@
           </button>
           <button type="button" (click)="openUserAuthModal('register')"
                   data-testid="header-register-btn"
-                  class="hidden sm:inline-flex px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs transition-all shadow-2xs cursor-pointer">
+                  class="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs transition-all shadow-2xs cursor-pointer">
             <span>Register</span>
           </button>
         </div>
@@ -400,7 +420,7 @@
                   data-testid="header-profile-btn"
                   class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs transition-all shadow-2xs cursor-pointer flex items-center space-x-1.5">
             <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span class="max-w-[85px] sm:max-w-[120px] truncate">{{ userService.currentUser()?.name || 'User Profile' }}</span>
+            <span class="max-w-[110px] truncate">{{ userService.currentUser()?.name || 'User Profile' }}</span>
           </button>
           <button type="button" (click)="onUserLogout()"
                   data-testid="header-logout-btn"
@@ -412,13 +432,13 @@
 
         <a *ngIf="!auth.isLoggedIn()" routerLink="/admin/login" class="px-2.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold shadow transition-all flex items-center space-x-1">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-          <span class="hidden sm:inline">Admin</span>
+          <span>Admin</span>
         </a>
 
         <div *ngIf="auth.isLoggedIn()" class="flex items-center space-x-1">
           <a routerLink="/admin/dashboard" class="px-2.5 py-1.5 rounded-xl bg-orange-600 text-white hover:bg-orange-700 text-xs font-semibold shadow transition-all flex items-center space-x-1">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
-            <span class="hidden sm:inline">Admin</span>
+            <span>Admin</span>
           </a>
           <button type="button" (click)="onAdminLogout()"
                   title="Logout from Admin Session"
@@ -429,38 +449,176 @@
       </div>
     </header>
 
+    <!-- Mobile Quick-Actions Pill Strip (< lg): Clean, touch-friendly, zero overflow -->
+    <div class="lg:hidden bg-slate-50 border-b border-slate-200 px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap shrink-0">
+      <div class="flex items-center bg-white p-0.5 rounded-lg border border-slate-300 shrink-0">
+        <button type="button" (click)="setLanguage('en')"
+                [ngClass]="selectedLanguage === 'en' ? 'bg-orange-600 text-white' : 'text-slate-600'"
+                class="px-2 py-0.5 text-[10px] font-bold rounded-md">EN</button>
+        <button type="button" (click)="setLanguage('hi')"
+                [ngClass]="selectedLanguage === 'hi' ? 'bg-orange-600 text-white' : 'text-slate-600'"
+                class="px-2 py-0.5 text-[10px] font-bold rounded-md">हिन्दी</button>
+        <button type="button" (click)="setLanguage('hinglish')"
+                [ngClass]="selectedLanguage === 'hinglish' ? 'bg-orange-600 text-white' : 'text-slate-600'"
+                class="px-2 py-0.5 text-[10px] font-bold rounded-md">Hinglish</button>
+      </div>
+
+      <select [ngModel]="autoHideMinutes" (ngModelChange)="setAutoHideMinutes(+$event)"
+              aria-label="Privacy timer"
+              class="bg-white border border-slate-300 rounded-lg text-[10px] font-bold text-slate-700 px-1.5 py-1 outline-none shrink-0">
+        <option [value]="2">🛡️ 2m</option>
+        <option [value]="1">🛡️ 1m</option>
+        <option [value]="5">🛡️ 5m</option>
+        <option [value]="0">🛡️ Off</option>
+      </select>
+
+      <button type="button" (click)="exportChat('excel')" [disabled]="isExportingChat !== null"
+              class="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+        {{ isExportingChat === 'excel' ? '...' : '📊 Excel' }}
+      </button>
+      <button type="button" (click)="exportChat('pdf')" [disabled]="isExportingChat !== null"
+              class="shrink-0 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold">
+        {{ isExportingChat === 'pdf' ? '...' : '📄 PDF' }}
+      </button>
+      <button type="button" (click)="openAboutModal()"
+              class="shrink-0 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 text-orange-900 text-[11px] font-bold">
+        ℹ️ About
+      </button>
+      <button *ngIf="!userService.isLoggedIn()" type="button" (click)="openUserAuthModal('login')"
+              class="shrink-0 px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-[11px] font-bold">
+        👤 Login
+      </button>
+      <button *ngIf="userService.isLoggedIn()" type="button" (click)="openUserAuthModal('profile')"
+              class="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 text-[11px] font-bold max-w-[110px] truncate">
+        👤 {{ userService.currentUser()?.name || 'Profile' }}
+      </button>
+      <a *ngIf="!auth.isLoggedIn()" routerLink="/admin/login"
+         class="shrink-0 px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold">
+        🔒 Admin
+      </a>
+      <a *ngIf="auth.isLoggedIn()" routerLink="/admin/dashboard"
+         class="shrink-0 px-2.5 py-1 rounded-lg bg-orange-600 text-white text-[11px] font-bold">
+        ⚙️ Admin
+      </a>
+    </div>
+
+    <!-- Learning Purpose & Knowledge Showcase Notice Banner -->
+    <div data-testid="learning-purpose-banner"
+         class="bg-amber-50/95 border-b border-amber-200 px-3 sm:px-4 py-1.5 text-[11px] sm:text-xs text-amber-950 flex items-center justify-center text-center gap-1.5 shrink-0">
+      <span>ℹ️</span>
+      <span>
+        <strong>For Learning Purpose Only:</strong> Dummy &amp; sample entries are included strictly for showing knowledge and AI system architecture — not all entries represent live or official data.
+      </span>
+    </div>
+
     <!-- Chat Message Section with WhatsApp-Style Privacy Shield Overlay (Req 7) -->
-    <div class="relative flex-1 overflow-hidden flex flex-col">
+    <div class="relative flex-1 min-h-0 overflow-hidden flex flex-col">
       
-      <!-- Privacy Shield Frosted Overlay (When Inactive or User Clicks Hide Chat) -->
+      <!-- WhatsApp-Style Skeleton Chat Privacy Overlay (When Inactive or User Clicks Hide Chat) -->
       <div *ngIf="isChatHidden"
            (click)="revealChat()"
            (mousemove)="onUserActivity()"
-           class="absolute inset-0 z-30 bg-slate-900/90 backdrop-blur-lg flex flex-col items-center justify-center p-6 text-center text-white animate-fade-in cursor-pointer">
-        <div class="w-16 h-16 rounded-3xl bg-white/10 border border-white/20 flex items-center justify-center text-3xl mb-4 shadow-xl">
-          🛡️
+           class="absolute inset-0 z-30 bg-[#EFEAE2]/95 backdrop-blur-md flex flex-col justify-between p-3 sm:p-6 overflow-hidden cursor-pointer select-none">
+
+        <!-- WhatsApp Fake Header Strip Skeleton -->
+        <div class="w-full max-w-3xl mx-auto flex items-center justify-between px-3 py-2 rounded-2xl bg-[#075E54]/90 text-white shadow-md">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-8 h-8 rounded-full bg-white/25 animate-pulse"></div>
+            <div class="space-y-1.5">
+              <div class="w-28 sm:w-36 h-2.5 bg-white/40 rounded-full animate-pulse"></div>
+              <div class="w-16 sm:w-20 h-2 bg-emerald-200/50 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-full bg-white/15 text-[10px] font-bold tracking-wider uppercase flex items-center space-x-1">
+            <span>🔒</span>
+            <span>Privacy Locked</span>
+          </span>
         </div>
-        <h3 class="font-extrabold text-base sm:text-lg text-white mb-1">Chat Privacy Shield Active</h3>
-        <p class="text-xs text-slate-300 max-w-md mb-2 leading-relaxed">
-          {{ autoHideMinutes > 0
-             ? ('Chat messages are hidden automatically after ' + autoHideMinutes + ' minute(s) of inactivity.')
-             : 'Chat messages were hidden manually.' }}
-        </p>
-        <p class="text-xs text-amber-300 font-semibold mb-5 flex items-center space-x-1.5">
-          <span>⚡ Move mouse, click, or tap anywhere to instantly unhide & continue</span>
-        </p>
-        <button type="button" (click)="revealChat()"
-                class="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs shadow-lg transition-all flex items-center space-x-2 cursor-pointer hover:scale-105 active:scale-95">
-          <span>👁️ Click to Reveal Chat Messages</span>
-        </button>
-        <span class="text-[11px] text-slate-400 mt-3 font-mono">
-          {{ autoHideMinutes > 0 ? ('Auto-hide: ' + autoHideMinutes + ' min • Resets countdown on mouse move or click') : 'Manual hide mode' }}
-        </span>
+
+        <!-- WhatsApp-Style Animated Skeleton Chat Bubbles -->
+        <div class="flex-1 w-full max-w-3xl mx-auto py-4 space-y-3 sm:space-y-4 overflow-hidden flex flex-col justify-center opacity-85">
+          <!-- Incoming Skeleton Bubble 1 -->
+          <div class="flex items-start space-x-2 max-w-[82%] sm:max-w-md">
+            <div class="w-7 h-7 rounded-full bg-slate-300/80 animate-pulse shrink-0"></div>
+            <div class="flex-1 bg-white rounded-2xl rounded-tl-sm p-3 shadow-xs space-y-2 border border-slate-200/70">
+              <div class="w-24 h-2.5 bg-emerald-200/70 rounded-full animate-pulse"></div>
+              <div class="w-48 sm:w-64 h-2.5 bg-slate-200 rounded-full animate-pulse"></div>
+              <div class="w-36 sm:w-52 h-2.5 bg-slate-200 rounded-full animate-pulse"></div>
+              <div class="flex justify-end"><div class="w-10 h-2 bg-slate-200/80 rounded-full"></div></div>
+            </div>
+          </div>
+
+          <!-- Outgoing WhatsApp Green Skeleton Bubble 1 -->
+          <div class="flex justify-end">
+            <div class="w-[74%] sm:w-80 bg-[#D9FDD3] rounded-2xl rounded-tr-sm p-3 shadow-xs space-y-2 border border-emerald-200/70">
+              <div class="w-full h-2.5 bg-emerald-700/15 rounded-full animate-pulse"></div>
+              <div class="w-2/3 h-2.5 bg-emerald-700/15 rounded-full animate-pulse"></div>
+              <div class="flex items-center justify-end space-x-1 text-[10px] text-sky-600/70 font-bold">
+                <div class="w-9 h-2 bg-emerald-700/15 rounded-full"></div>
+                <span>✓✓</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Incoming Skeleton Bubble 2 -->
+          <div class="flex items-start space-x-2 max-w-[86%] sm:max-w-lg">
+            <div class="w-7 h-7 rounded-full bg-slate-300/80 animate-pulse shrink-0"></div>
+            <div class="flex-1 bg-white rounded-2xl rounded-tl-sm p-3 shadow-xs space-y-2 border border-slate-200/70">
+              <div class="w-28 h-2.5 bg-orange-200/80 rounded-full animate-pulse"></div>
+              <div class="w-full h-2.5 bg-slate-200 rounded-full animate-pulse"></div>
+              <div class="w-5/6 h-2.5 bg-slate-200 rounded-full animate-pulse"></div>
+              <div class="w-1/2 h-2.5 bg-slate-200 rounded-full animate-pulse"></div>
+              <div class="flex justify-end"><div class="w-10 h-2 bg-slate-200/80 rounded-full"></div></div>
+            </div>
+          </div>
+
+          <!-- Outgoing WhatsApp Green Skeleton Bubble 2 -->
+          <div class="flex justify-end">
+            <div class="w-[62%] sm:w-64 bg-[#D9FDD3] rounded-2xl rounded-tr-sm p-3 shadow-xs space-y-2 border border-emerald-200/70">
+              <div class="w-full h-2.5 bg-emerald-700/15 rounded-full animate-pulse"></div>
+              <div class="flex items-center justify-end space-x-1 text-[10px] text-sky-600/70 font-bold">
+                <div class="w-9 h-2 bg-emerald-700/15 rounded-full"></div>
+                <span>✓✓</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Centered Floating WhatsApp Privacy Unlock Card -->
+        <div class="w-full max-w-md mx-auto bg-slate-900/95 backdrop-blur-md text-white rounded-2xl p-4 sm:p-5 shadow-2xl border border-white/15 flex flex-col items-center text-center space-y-2.5">
+          <div class="flex items-center space-x-2">
+            <span class="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-base">🔒</span>
+            <h3 class="font-extrabold text-sm sm:text-base text-white">WhatsApp-Style Chat Privacy Active</h3>
+          </div>
+          <p class="text-[11px] sm:text-xs text-slate-300 leading-relaxed">
+            {{ autoHideMinutes > 0
+               ? ('Messages masked with skeleton bubbles after ' + autoHideMinutes + ' min inactivity.')
+               : 'Messages are masked with skeleton bubbles in private mode.' }}
+          </p>
+          <button type="button" (click)="revealChat()"
+                  class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95">
+            <span>👁️</span>
+            <span>Tap or Move Mouse to Reveal Chat</span>
+          </button>
+        </div>
       </div>
 
+      <!-- Jump to Latest Messages Button (shown when user scrolls up) -->
+      <button *ngIf="userScrolledUp && !isChatHidden"
+              type="button"
+              (click)="jumpToBottom()"
+              data-testid="scroll-to-bottom-btn"
+              class="absolute bottom-4 right-5 z-20 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-orange-600 text-white text-xs font-bold shadow-lg border border-white/20 backdrop-blur flex items-center space-x-1 transition-all cursor-pointer">
+        <span>↓</span>
+        <span>Latest</span>
+      </button>
+
       <!-- Message Scroll Area -->
-      <div #scrollContainer [class.blur-md]="isChatHidden" [class.pointer-events-none]="isChatHidden" [class.select-none]="isChatHidden"
-           class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 transition-all duration-200">
+      <div #scrollContainer
+           (scroll)="onChatScroll()"
+           (wheel)="onChatWheel($event)"
+           [class.blur-md]="isChatHidden" [class.pointer-events-none]="isChatHidden" [class.select-none]="isChatHidden"
+           class="chat-scroll-area flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-3.5 sm:space-y-4 transition-all duration-200">
       <div *ngFor="let msg of messages" class="flex flex-col" [class.items-end]="msg.sender === 'user'" [class.items-start]="msg.sender === 'assistant'">
         
         <!-- User Message Bubble -->
@@ -475,8 +633,8 @@
         <div *ngIf="msg.sender === 'assistant'" class="max-w-[95%] sm:max-w-2xl bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 sm:p-5 shadow-sm space-y-3">
           
           <!-- Assistant Avatar & Tag + View Mode Toggle (Preview / Raw) -->
-          <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <div class="flex items-center space-x-2">
+          <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-100 pb-2.5">
+            <div class="flex flex-wrap items-center gap-1.5 min-w-0">
               <div class="w-6 h-6 rounded-lg overflow-hidden border border-orange-200 shadow-2xs flex-shrink-0 bg-white">
                 <img src="avatar.png" onerror="this.onerror=null;this.src='avatar.svg';" alt="AI Avatar" class="w-full h-full object-cover" />
               </div>
@@ -563,7 +721,7 @@
           <!-- Natural Real-User Typing Cursor while Streaming -->
           <div *ngIf="msg.isStreaming && msg.text" class="flex items-center space-x-1.5 text-[11px] text-orange-600 font-semibold">
             <span class="inline-block w-1.5 h-3.5 bg-orange-500 animate-pulse rounded-xs"></span>
-            <span>Typing live...</span>
+            <span>{{ getAgentTypingLabel() }}</span>
           </div>
 
           <!-- Welcome Jain Live Voice Action Box -->
@@ -608,8 +766,8 @@
           </div>
 
           <!-- Typing Indicator -->
-          <div *ngIf="msg.isStreaming && !msg.text" class="flex items-center space-x-2 text-slate-400 py-1">
-            <span class="text-xs font-medium">Querying simulated geographic knowledge graph...</span>
+          <div *ngIf="msg.isStreaming && !msg.text" class="flex items-center space-x-2 text-slate-500 py-1">
+            <span class="text-xs font-medium">{{ getAgentThinkingLabel() }}</span>
             <div class="flex space-x-1">
               <span class="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce"></span>
               <span class="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce" style="animation-delay: 0.15s"></span>
@@ -641,7 +799,7 @@
   </div>
 
     <!-- Quick Chips Area -->
-    <div class="px-4 py-2 bg-white/70 border-t border-slate-200 overflow-x-auto flex items-center space-x-2 scrollbar-none">
+    <div class="px-4 py-2 bg-white/70 border-t border-slate-200 overflow-x-auto flex items-center space-x-2 scrollbar-none shrink-0">
       <button (click)="openQuestionsModal()"
               class="shrink-0 text-xs px-2.5 py-1 rounded-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold transition-all shadow-xs flex items-center space-x-1 cursor-pointer">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
@@ -657,14 +815,14 @@
     </div>
 
     <!-- Input Bar -->
-    <div class="p-3 sm:p-4 bg-white border-t border-slate-200">
-      <form (ngSubmit)="sendMessage()" (submit)="$event.preventDefault()" class="max-w-4xl mx-auto flex items-center space-x-2 sm:space-x-3">
-        <div class="relative flex-1">
+    <div class="p-2.5 sm:p-4 bg-white border-t border-slate-200 shrink-0">
+      <form (ngSubmit)="sendMessage()" (submit)="$event.preventDefault()" class="max-w-4xl mx-auto flex items-center space-x-1.5 sm:space-x-3">
+        <div class="relative flex-1 min-w-0">
           <input type="text" [(ngModel)]="inputQuery" name="query"
                  [disabled]="isStreaming"
-                 placeholder="Ask about any Village, Tehsil, District, Division, Urban Ward, or Pincode..."
-                 class="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400">
-          <button *ngIf="inputQuery" type="button" (click)="inputQuery=''" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                 placeholder="Ask Village, Block, GP, Ward or Pincode..."
+                 class="w-full pl-3.5 sm:pl-4 pr-9 py-2.5 sm:py-3 rounded-xl border border-slate-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-xs sm:text-sm outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400">
+          <button *ngIf="inputQuery" type="button" (click)="inputQuery=''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
@@ -672,13 +830,13 @@
         <!-- Live Jain Voice Mic Button -->
         <button type="button" (click)="openVoiceAgent()"
                 title="Start Full-Screen Jain Live Voice Conversation"
-                class="px-3.5 py-3 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-indigo-200 text-indigo-700 font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer group">
+                class="px-3 sm:px-3.5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-indigo-200 text-indigo-700 font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer group shrink-0">
           <span class="text-base group-hover:scale-125 transition-transform">🎙️</span>
           <span class="hidden md:inline text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Live Voice</span>
         </button>
 
         <button type="submit" [disabled]="!inputQuery.trim() || isStreaming"
-                class="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-sm shadow hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5 cursor-pointer">
+                class="px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs sm:text-sm shadow hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5 cursor-pointer shrink-0">
           <span>Send</span>
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
         </button>
@@ -880,7 +1038,7 @@
               Instead of generic web searches, this architecture showcases how an intelligent LLM agent interacts with normalized hierarchical relational data (10 Divisions, 50 Districts, Tehsils, Gram Panchayats, Urban Local Bodies, and Pincodes) to deliver structured, deterministic, and instant answers with sub-second latency.
             </p>
             <div class="p-2.5 rounded-xl bg-amber-100/70 border border-amber-300 text-amber-950 text-xs font-semibold">
-              ⚠️ <strong>Portfolio Disclaimer:</strong> This project is a simulated technical demonstration built for learning, research, and portfolio presentation. It is not affiliated with or endorsed by any government entity, and all administrative data is simulated for demonstration purposes.
+              ⚠️ <strong>Learning Purpose Only:</strong> This portal is built strictly for learning and showing AI &amp; full-stack knowledge. Dummy and sample entries in the database may not represent real or complete official data and are used solely for educational demonstration.
             </div>
             <div class="p-3.5 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
               <div>
@@ -1034,7 +1192,7 @@
               यह प्रणाली यह दर्शाती है कि कैसे एक आधुनिक एजेंटिक एआई किसी भी जटिल भौगोलिक व प्रशासनिक पदानुक्रम (10 संभाग, 50 जिले, तहसील, ग्राम पंचायत एवं पिनकोड) को समझकर बिना किसी भ्रम (Zero Hallucination) के सटीक, संरचनात्मक और त्वरित उत्तर प्रदान कर सकता है।
             </p>
             <div class="p-2.5 rounded-xl bg-amber-100/70 border border-amber-300 text-amber-950 text-xs font-semibold">
-              ⚠️ <strong>पोर्टफोलियो सूचना:</strong> यह एक तकनीकी एवं शैक्षणिक डेमो प्रोजेक्ट है। यह किसी भी सरकारी विभाग या प्राधिकरण से संबद्ध नहीं है, और इसका उपयोग सीखने व तकनीकी प्रदर्शन के उद्देश्य से किया गया है।
+              ⚠️ <strong>केवल सीखने के उद्देश्य से (Learning Purpose Only):</strong> यह पोर्टल केवल सीखने और तकनीकी ज्ञान प्रदर्शित करने के लिए बनाया गया है। इसमें मौजूद सभी डमी/सैंपल एंट्रीज वास्तविक या पूर्ण सरकारी डेटा नहीं हैं, बल्कि केवल AI व सिस्टम आर्किटेक्चर दिखाने के लिए उपयोग की गई हैं।
             </div>
             <div class="p-3.5 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
               <div>
@@ -1281,7 +1439,7 @@
               <span>Step 1: User Text Input & Language Detection 📱</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              The citizen or revenue officer types an administrative question in <strong>English</strong>, <strong>Hindi</strong>, or <strong>Hinglish</strong> (e.g., <em>"What is the division of Balotra?"</em> or <em>"Show database stats via MCP"</em>). The frontend captures this and dispatches a JSON POST payload to <code>/api/chat/stream</code>.
+              The citizen or revenue officer types an administrative question in <strong>English</strong>, <strong>Hindi</strong>, or <strong>Hinglish</strong> (e.g., <em>"What is the division of Balotra?"</em> or <em>"Details of pincode 302029"</em>). The frontend captures this and dispatches a JSON POST payload to <code>/api/chat/stream</code>.
             </p>
           </div>
 
@@ -1294,9 +1452,9 @@
               Before running database or AI queries, the <code>guardrail_classifier_node</code> evaluates the query:
             </p>
             <ul class="text-xs text-slate-600 space-y-1 list-disc list-inside">
-              <li><strong>Geographic / MCP Query:</strong> Contains district, tehsil, village, 6-digit pincode, or MCP database inspection ➔ Routes to LangGraph + MCP.</li>
+              <li><strong>Geographic Hierarchy Query:</strong> Contains district, tehsil, village, or 6-digit pincode ➔ Routes to LangGraph + read-only geographic MCP lookup.</li>
               <li><strong>Capability Query:</strong> Asks for help, overview, or 6 tiers ➔ Routes to Capability Node.</li>
-              <li><strong>Out of Scope:</strong> Non-Rajasthan general queries ➔ Routed to official scope notice with citizen helpline <strong>89988555525</strong>.</li>
+              <li><strong>Out of Scope / Schema Probes:</strong> Non-Rajasthan queries or database schema/table/SQL probes ➔ Blocked and routed to official scope notice with citizen helpline <strong>89988555525</strong>.</li>
             </ul>
           </div>
 
@@ -1306,7 +1464,7 @@
               <span>Step 3: LangGraph 6-Tier PostgreSQL + MCP Server (JSON-RPC 2.0) ⚡</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              The agent performs high-precision matching across PostgreSQL AND invokes the local/live <code>finalairajmaster-postgres-mcp</code> server over JSON-RPC 2.0 (<code>stdio-jsonrpc</code> locally / <code>inprocess-jsonrpc</code> fallback in serverless) using 5 MCP tools: <code>get_administrative_lineage</code>, <code>get_database_stats</code>, <code>list_tables</code>, <code>describe_table</code>, and <code>read_query</code>.
+              The agent performs high-precision matching across PostgreSQL AND invokes the local/live <code>finalairajmaster-postgres-mcp</code> server over JSON-RPC 2.0 (<code>stdio-jsonrpc</code> locally / <code>inprocess-jsonrpc</code> fallback in serverless) strictly scoped to read-only 6-tier geographic lookup (<code>get_administrative_lineage</code> and strict single-statement <code>SELECT</code> on permitted geographic tables only).
             </p>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-semibold text-slate-700">
               <div class="p-2 bg-slate-50 rounded-lg border border-slate-200">1. State: Rajasthan</div>
@@ -1371,7 +1529,7 @@
               <span>चरण 1: उपयोगकर्ता का प्रश्न व भाषा पहचान 📱</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              नागरिक या राजस्व अधिकारी हिंदी या अंग्रेजी में प्रश्न पूछता है (जैसे: <em>"बालोतरा किस संभाग में है?"</em> या <em>"Show database stats via MCP"</em>)। सिस्टम तुरंत भाषा की पहचान करके बैकएंड को भेजता है।
+              नागरिक या राजस्व अधिकारी हिंदी या अंग्रेजी में प्रश्न पूछता है (जैसे: <em>"बालोतरा किस संभाग में है?"</em> या <em>"पिनकोड 302029 का विवरण"</em>)। सिस्टम तुरंत भाषा की पहचान करके बैकएंड को भेजता है।
             </p>
           </div>
 
@@ -1384,9 +1542,9 @@
               गार्डरेल नोड प्रश्न की जांच करता है:
             </p>
             <ul class="text-xs text-slate-600 space-y-1 list-disc list-inside">
-              <li><strong>प्रशासनिक / MCP प्रश्न:</strong> जिला, तहसील, संभाग, गांव, पिनकोड या MCP डेटाबेस जांच ➔ LangGraph + MCP में खोज।</li>
+              <li><strong>प्रशासनिक प्रश्न:</strong> जिला, तहसील, संभाग, गांव या पिनकोड ➔ LangGraph + रीड-ओनली भौगोलिक MCP खोज।</li>
               <li><strong>पोर्टल जानकारी:</strong> 6-स्तरीय व्यवस्था व कार्यप्रणाली ➔ क्षमता नोड।</li>
-              <li><strong>असंबंधित प्रश्न:</strong> राजस्थान से बाहर के प्रश्न ➔ आधिकारिक नागरिक हेल्पलाइन <strong>89988555525</strong> पर मार्गदर्शन।</li>
+              <li><strong>असंबंधित / डेटाबेस स्कीमा प्रश्न:</strong> राजस्थान से बाहर के प्रश्न या टेबल/स्कीमा/SQL जांच ➔ ब्लॉक कर आधिकारिक नागरिक हेल्पलाइन <strong>89988555525</strong> पर मार्गदर्शन।</li>
             </ul>
           </div>
 
@@ -1396,7 +1554,7 @@
               <span>चरण 3: LangGraph 6-स्तरीय PostgreSQL व MCP सर्वर खोज ⚡</span>
             </h3>
             <p class="text-xs text-slate-600 leading-relaxed">
-              सिस्टम 10 संभागों, 50 जिलों, तहसीलों व पिनकोडों में खोज के साथ <code>finalairajmaster-postgres-mcp</code> (JSON-RPC 2.0) के 5 MCP टूल्स (<code>get_administrative_lineage</code>, <code>get_database_stats</code>, <code>list_tables</code>, <code>describe_table</code>, <code>read_query</code>) का उपयोग करता है।
+              सिस्टम 10 संभागों, 50 जिलों, तहसीलों व पिनकोडों में खोज के साथ <code>finalairajmaster-postgres-mcp</code> (JSON-RPC 2.0) का उपयोग केवल 6-स्तरीय भौगोलिक रीड-ओनली लुकअप (<code>get_administrative_lineage</code> तथा अनुमत भौगोलिक तालिकाओं पर सीमित <code>SELECT</code>) के लिए करता है।
             </p>
           </div>
 

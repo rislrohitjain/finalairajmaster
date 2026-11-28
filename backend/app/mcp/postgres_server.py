@@ -5,6 +5,7 @@ import re
 import logging
 from typing import Dict, Any, List, Optional
 import psycopg2
+from psycopg2 import sql
 from psycopg2.extras import RealDictCursor
 
 # Ensure backend root is on sys.path if run directly
@@ -72,7 +73,7 @@ def _clean_breadcrumbs(items: List[Optional[str]]) -> List[str]:
 # =====================================================================
 
 def tool_list_tables() -> Dict[str, Any]:
-    """Lists all user tables in finalairajmaster with columns and row count."""
+    """Lists only permitted geographic tables with row and column counts (hides auth/config tables)."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -81,11 +82,11 @@ def tool_list_tables() -> Dict[str, Any]:
                 WHERE table_schema = 'public' 
                 ORDER BY table_name;
             """)
-            tables = [row["table_name"] for row in cur.fetchall()]
+            tables = [row["table_name"] for row in cur.fetchall() if row["table_name"] in ALLOWED_READ_TABLES]
             
             table_info = []
             for t in tables:
-                cur.execute(f"SELECT count(*) AS cnt FROM {t};")
+                cur.execute(sql.SQL("SELECT count(*) AS cnt FROM {};").format(sql.Identifier(t)))
                 cnt = cur.fetchone()["cnt"]
                 
                 cur.execute("""
@@ -102,17 +103,15 @@ def tool_list_tables() -> Dict[str, Any]:
                 })
                 
             return {
-                "database": DB_NAME,
                 "total_tables": len(tables),
                 "tables": table_info
             }
 
 
 def tool_describe_table(table_name: str) -> Dict[str, Any]:
-    """Describes table columns, data types, constraints, and nullable flags."""
-    # Sanitize table_name against alphanumeric and underscore
-    if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
-        raise ValueError(f"Invalid table name: {table_name}")
+    """Describes permitted geographic table columns, data types, constraints, and nullable flags."""
+    if not re.match(r"^[a-zA-Z0-9_]+$", table_name) or table_name not in ALLOWED_READ_TABLES:
+        raise ValueError(f"Access to table '{table_name}' is not permitted.")
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -161,40 +160,82 @@ def tool_describe_table(table_name: str) -> Dict[str, Any]:
             }
 
 
+ALLOWED_READ_TABLES = {
+    "states", "divisions", "districts", "sub_divisions", "tehsils_blocks",
+    "gram_panchayats", "panchayat_wards", "villages", "urban_local_bodies",
+    "urban_wards", "pincodes"
+}
+
+BLOCKED_SQL_TABLES_AND_SCHEMAS = {
+    "admins", "portal_users", "llm_settings", "chat_logs", "scraper_runs",
+    "rag_support", "information_schema", "pg_catalog", "pg_stat_activity",
+    "pg_roles", "pg_user", "pg_shadow", "pg_authid"
+}
+
+
 def tool_read_query(query: str, limit: int = 100) -> Dict[str, Any]:
     """
-    Executes a safe read-only SQL SELECT / WITH / EXPLAIN query.
-    Prevents any DDL/DML statements (INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE).
+    Executes a strictly validated read-only SELECT query against public geographic
+    hierarchy tables only. Blocks DDL/DML, multi-statements, comments, system catalogs,
+    and sensitive auth/config/log tables.
     """
-    cleaned = query.strip()
-    norm = cleaned.lower()
-    
-    # Safety verification
-    allowed_starts = ("select", "with", "explain", "show")
-    if not any(norm.startswith(prefix) for prefix in allowed_starts):
-        raise ValueError("Only read-only queries (SELECT, WITH, EXPLAIN, SHOW) are permitted.")
-        
-    forbidden = ["insert ", "update ", "delete ", "drop ", "alter ", "truncate ", "create ", "grant ", "revoke ", "exec ", "execute "]
-    for word in forbidden:
-        if word in norm:
-            raise ValueError(f"Prohibited mutation clause detected: '{word.strip()}'")
+    cleaned = (query or "").strip()
+    if not cleaned:
+        raise ValueError("Query cannot be empty.")
+
+    # Reject SQL comments and stacked/multi-statement queries
+    if "--" in cleaned or "/*" in cleaned or "*/" in cleaned:
+        raise ValueError("SQL comments are not permitted.")
+    stripped_semi = cleaned.rstrip(";").strip()
+    if ";" in stripped_semi:
+        raise ValueError("Multiple SQL statements are not permitted.")
+
+    norm = re.sub(r"\s+", " ", stripped_semi).lower()
+
+    # Allow ONLY SELECT statements (no WITH, EXPLAIN, SHOW, COPY, CALL, DO, etc.)
+    if not re.match(r"^select\b", norm):
+        raise ValueError("Only SELECT queries are permitted.")
+
+    # Word-boundary check for mutations, locking, or dangerous functions
+    forbidden_keywords = (
+        r"\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|"
+        r"exec|execute|call|do|copy|into|set|reset|vacuum|analyze|reindex|"
+        r"lock|for\s+update|for\s+share|pg_sleep|pg_read_file|pg_ls_dir|"
+        r"lo_import|lo_export|dblink)\b"
+    )
+    if re.search(forbidden_keywords, norm):
+        raise ValueError("Prohibited SQL clause or function detected.")
+
+    # Block sensitive/internal tables and system catalogs
+    for blocked in BLOCKED_SQL_TABLES_AND_SCHEMAS:
+        if re.search(r"\b" + re.escape(blocked) + r"\b", norm):
+            raise ValueError(f"Access to restricted table or schema '{blocked}' is not permitted.")
+
+    # Verify at least one allowed geographic table is referenced and no unauthorized FROM/JOIN target
+    referenced_tables = re.findall(r"\b(?:from|join)\s+([a-zA-Z0-9_\.]+)", norm)
+    if not referenced_tables:
+        raise ValueError("SELECT query must reference an allowed Rajasthan geographic table.")
+    for tbl in referenced_tables:
+        base_tbl = tbl.split(".")[-1].strip('"')
+        if base_tbl not in ALLOWED_READ_TABLES:
+            raise ValueError(f"Table '{base_tbl}' is not permitted in read_query.")
+
+    safe_limit = max(1, min(int(limit or 100), 100))
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # Enforce read-only transaction mode
             cur.execute("SET TRANSACTION READ ONLY;")
-            cur.execute(cleaned)
+            cur.execute(stripped_semi)
             rows = cur.fetchall()
-            
-            if len(rows) > limit:
-                truncated_rows = rows[:limit]
+
+            if len(rows) > safe_limit:
+                truncated_rows = rows[:safe_limit]
                 truncated = True
             else:
                 truncated_rows = rows
                 truncated = False
 
             return {
-                "query": cleaned,
                 "row_count": len(rows),
                 "returned_count": len(truncated_rows),
                 "truncated": truncated,
@@ -433,22 +474,21 @@ def tool_get_administrative_lineage(entity_name_or_pincode: str) -> Dict[str, An
 
 
 def tool_get_database_stats() -> Dict[str, Any]:
-    """Summary counts of administrative entities across all 6 Rajasthan tiers."""
+    """Summary counts of administrative entities across the 6 Rajasthan geographic tiers."""
     tables = [
         "states", "divisions", "districts", "sub_divisions", "tehsils_blocks",
         "gram_panchayats", "panchayat_wards", "villages", "urban_local_bodies",
-        "urban_wards", "pincodes", "chat_logs", "scraper_runs"
+        "urban_wards", "pincodes"
     ]
     counts = {}
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             for t in tables:
-                cur.execute(f"SELECT count(*) AS cnt FROM {t};")
+                cur.execute(sql.SQL("SELECT count(*) AS cnt FROM {};").format(sql.Identifier(t)))
                 counts[t] = cur.fetchone()["cnt"]
 
     return {
         "status": "healthy",
-        "database": DB_NAME,
         "counts": counts,
         "summary": {
             "tier_1_state": counts.get("states", 0),

@@ -226,14 +226,68 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
         # 2. Check for State-Level, Division-Overview, or Districts-List Specific Queries
         q_lower = clean_query.lower()
 
-        # Check for list/overview of districts
+        is_direct_count = bool(
+            re.search(r"\b(?:count|number\s+of|how\s+many|total\s+(?:number|count)?|kitne|kitni|sankhya)\b", q_lower)
+            or any(w in q_lower for w in ["संख्या", "कितने", "कितनी"])
+        )
+        explicit_list_request = bool(
+            re.search(r"\b(?:list|name|names|naam|which|kaun|kaun\s*se|kaunsi|show\s+all)\b", q_lower)
+            or any(w in q_lower for w in ["नाम", "सूची", "बताएं", "दिखाएं", "कौन"])
+        )
+        is_single_count_intent = is_direct_count and not explicit_list_request
+        has_division_word = any(w in q_lower for w in ["division", "divisions", "sambhag", "संभाग"])
+        has_district_word = any(w in q_lower for w in ["district", "districts", "जिला", "जिले", "zila", "zile"])
+        has_explicit_named_division = bool(
+            re.search(r"\b[a-z]+\s+(?:division|sambhag)\b", q_lower)
+            or re.search(r"[\u0900-\u097F]+\s+संभाग", q_lower)
+        )
+
+        # Direct State-level single-value count queries (divisions or districts in Rajasthan)
+        if is_single_count_intent and not has_explicit_named_division:
+            if has_division_word and not has_district_word:
+                div_cnt = (await session.execute(select(func.count(Division.id)))).scalar() or 10
+                result["matched"] = True
+                result["entity_type"] = "State"
+                result["entity_name"] = "Rajasthan"
+                result["lineage"] = {"state": "Rajasthan", "divisions_count": div_cnt}
+                result["breadcrumbs"] = ["Rajasthan", f"{div_cnt} Divisions"]
+                result["details"] = {
+                    "direct_count_query": True,
+                    "count_target": "divisions",
+                    "count_value": div_cnt,
+                    "count_scope": "Rajasthan",
+                }
+                return result
+
+            if has_district_word and ("rajasthan" in q_lower or "राजस्थान" in q_lower):
+                dist_cnt = (await session.execute(select(func.count(District.id)))).scalar() or 50
+                result["matched"] = True
+                result["entity_type"] = "State"
+                result["entity_name"] = "Rajasthan"
+                result["lineage"] = {"state": "Rajasthan", "districts_count": dist_cnt}
+                result["breadcrumbs"] = ["Rajasthan", f"{dist_cnt} Districts"]
+                result["details"] = {
+                    "direct_count_query": True,
+                    "count_target": "districts",
+                    "count_value": dist_cnt,
+                    "count_scope": "Rajasthan",
+                }
+                return result
+
+        # Check for list/overview of districts (skip if single-count query or explicit division query)
         is_district_list_query = (
-            any(w in q_lower for w in ["district", "districts", "जिला", "जिले", "zila", "zile"]) and
-            any(w in q_lower for w in ["list", "name", "names", "10", "ten", "how many", "all", "naam", "नाम", "सूची", "बताएं", "बताओ", "दिखाएं"])
-        ) or any(phrase in q_lower for phrase in [
-            "districts of rajasthan", "districts in rajasthan", "rajasthan districts",
-            "10 districts", "ten districts", "districts name", "district names"
-        ])
+            not is_single_count_intent
+            and not has_explicit_named_division
+            and (
+                (
+                    has_district_word and
+                    any(w in q_lower for w in ["list", "name", "names", "10", "ten", "all", "naam", "नाम", "सूची", "बताएं", "बताओ", "दिखाएं"])
+                ) or any(phrase in q_lower for phrase in [
+                    "districts of rajasthan", "districts in rajasthan", "rajasthan districts",
+                    "10 districts", "ten districts", "districts name", "district names"
+                ])
+            )
+        )
 
         if is_district_list_query:
             stmt = (
@@ -778,6 +832,38 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                 if v_res:
                     return v_res
 
+        if has_explicit_named_division and not (is_pincode_intent or is_gp_intent or is_block_intent or is_tehsil_intent or is_village_intent):
+            for term in terms_to_try:
+                sterm = f"%{term}%"
+                div = (await session.execute(select(Division).where(
+                    or_(Division.name_en.ilike(sterm), Division.name_hi.ilike(sterm))
+                ).limit(1))).scalar_one_or_none()
+                if div:
+                    dist_list = (await session.execute(select(District).where(District.division_id == div.id))).scalars().all()
+                    result["matched"] = True
+                    result["entity_type"] = "Division"
+                    result["entity_name"] = div.name_en
+                    result["lineage"] = {
+                        "state": "Rajasthan",
+                        "division": div.name_en,
+                        "divisional_commissioner": div.divisional_commissioner,
+                        "districts": [d.name_en for d in dist_list]
+                    }
+                    result["breadcrumbs"] = ["Rajasthan", div.name_en]
+                    result["details"] = {
+                        "division_english": div.name_en,
+                        "division_hindi": div.name_hi,
+                        "divisional_commissioner": div.divisional_commissioner,
+                        "districts_count": len(dist_list),
+                        "districts": [d.name_en for d in dist_list],
+                        "lgd_code": div.lgd_code,
+                        "direct_count_query": is_single_count_intent,
+                        "count_target": "districts" if is_single_count_intent else None,
+                        "count_value": len(dist_list) if is_single_count_intent else None,
+                        "count_scope": div.name_en,
+                    }
+                    return result
+
         for term in terms_to_try:
             sterm = f"%{term}%"
 
@@ -793,12 +879,23 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                 ulb_cnt = (await session.execute(select(func.count(UrbanLocalBody.id)).where(UrbanLocalBody.district_id == dst.id))).scalar() or 0
 
                 q_lower = clean_query.lower()
-                is_count_query = any(k in q_lower for k in [
-                    "number of", "count of", "how many", "total number", "kitne", "kitni", "sankhya", "संख्या", "कितने", "कितनी"
-                ])
+                is_count_query = is_direct_count
                 asked_villages = any(k in q_lower for k in ["village", "villages", "gaon", "गांव", "गाँव"])
                 asked_tehsils = any(k in q_lower for k in ["tehsil", "tehsils", "block", "blocks", "तहसील", "ब्लॉक"])
                 asked_panchayats = any(k in q_lower for k in ["panchayat", "gram panchayat", "पंचायत"])
+                asked_ulbs = any(k in q_lower for k in ["ulb", "urban local", "municipal", "नगर निगम", "नगरीय निकाय"])
+
+                direct_count_tgt = None
+                direct_count_val = None
+                if is_single_count_intent:
+                    if asked_villages:
+                        direct_count_tgt, direct_count_val = "villages", v_cnt
+                    elif asked_tehsils:
+                        direct_count_tgt, direct_count_val = "tehsils", tb_cnt
+                    elif asked_panchayats:
+                        direct_count_tgt, direct_count_val = "gram_panchayats", gp_cnt
+                    elif asked_ulbs:
+                        direct_count_tgt, direct_count_val = "ulbs", ulb_cnt
 
                 result["matched"] = True
                 result["entity_type"] = "District"
@@ -823,6 +920,10 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                     "collectorate": dst.collectorate_details,
                     "lgd_code": dst.lgd_code,
                     "is_count_query": is_count_query,
+                    "direct_count_query": bool(direct_count_tgt is not None),
+                    "count_target": direct_count_tgt,
+                    "count_value": direct_count_val,
+                    "count_scope": f"{dst.name_en} District",
                     "villages_count": v_cnt,
                     "tehsils_count": tb_cnt,
                     "gram_panchayats_count": gp_cnt,
@@ -898,7 +999,11 @@ async def _lookup_geographic_hierarchy_impl(query: str) -> Dict[str, Any]:
                     "divisional_commissioner": div.divisional_commissioner,
                     "districts_count": len(dist_list),
                     "districts": [d.name_en for d in dist_list],
-                    "lgd_code": div.lgd_code
+                    "lgd_code": div.lgd_code,
+                    "direct_count_query": is_single_count_intent,
+                    "count_target": "districts" if is_single_count_intent else None,
+                    "count_value": len(dist_list) if is_single_count_intent else None,
+                    "count_scope": div.name_en,
                 }
                 return result
 

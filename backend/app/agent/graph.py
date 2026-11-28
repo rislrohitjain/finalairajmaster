@@ -169,6 +169,31 @@ async def get_active_llm_config() -> Dict[str, Any]:
         "web_search_max_results": 4
     }
 
+DB_RECON_AND_SECURITY_PATTERNS = [
+    r"\b(?:what|which|number|count|total|list|show|all|how\s+many|name|names|get|fetch)\s+(?:of\s+|the\s+|all\s+)?(?:db\s+|database\s+|sql\s+|postgres(?:ql)?\s+)?tables?\b",
+    r"\btables?\s+(?:exist|available|present|defined|created|in\s+(?:the\s+)?(?:db|database|system|portal|rajasthan|postgres(?:ql)?))\b",
+    r"\b(?:db|database|schema|postgres(?:ql)?)\b.*\btables?\b",
+    r"\btable\s+(?:schema|structure|columns?|count|list|names?)\b",
+    r"\b(?:describe|alter|drop|truncate|delete|insert|update|create|grant|revoke)\s+(?:table|database|schema|user|admin)\b",
+    r"\b(?:database|db)\s+(?:stats|statistics|schema|structure|tables?|columns?|users?|passwords?|config|count)\b",
+    r"\b(?:information_schema|pg_catalog|pg_tables|portal_users|llm_settings|chat_logs|scraper_runs|rag_support)\b",
+    r"\bselect\s+.+\s+from\b",
+    r"\b(?:union\s+select|system\s+prompt|api\s*key|jwt\s*secret|db_password|password_hash)\b",
+    r"(?:डेटाबेस|स्कीमा).*(?:टेबल|तालिका|संख्या|नाम)",
+    r"(?:कितनी|कुल|सभी)\s*(?:टेबल|टेबल्स|तालिका|तालिकाएं)",
+]
+
+
+def _is_security_or_schema_probe(query: str) -> bool:
+    """Blocks database schema enumeration, SQL injection attempts, and internal system probes."""
+    q = (query or "").strip().lower()
+    if any(re.search(pat, q) for pat in DB_RECON_AND_SECURITY_PATTERNS):
+        return True
+    if "--" in q or "/*" in q or ";" in q and "select" in q:
+        return True
+    return False
+
+
 # ----------------- NODE 1: Guardrail & Intent Classifier -----------------
 async def guardrail_classifier_node(state: AgentState) -> AgentState:
     t0 = time.perf_counter()
@@ -190,9 +215,9 @@ async def guardrail_classifier_node(state: AgentState) -> AgentState:
         )
         return state
 
-    # Check if MCP metadata / database inspection query
-    if _detect_mcp_metadata_intent(query):
-        return _finish("geographic_query", "MCP database inspection query")
+    # 0. Strict security guardrail: block database table/schema/SQL/secret probing even if "Rajasthan" is mentioned
+    if _is_security_or_schema_probe(query):
+        return _finish("out_of_scope", "Restricted internal database/system query blocked")
 
     # Check if explicitly related to Rajasthan or official administration
     is_rajasthan_related = (
@@ -469,6 +494,42 @@ def format_natural_language_lineage(
     village = lineage.get("village") or lineage.get("area_or_village")
     pincode = details.get("pincode") or lineage.get("pincode")
     etype = (entity_type or "").lower()
+
+    # Concise Single-Value Answer for Direct Count Queries (no extra paragraphs or governance headers)
+    if details.get("direct_count_query") and details.get("count_value") is not None:
+        val = int(details["count_value"])
+        tgt = details.get("count_target") or "records"
+        scope = details.get("count_scope") or entity_name or "Rajasthan"
+        if language == "hi":
+            tgt_hi = {
+                "districts": "जिले",
+                "divisions": "संभाग",
+                "tehsils": "तहसीलें एवं ब्लॉक",
+                "villages": "राजस्व गांव",
+                "gram_panchayats": "ग्राम पंचायतें",
+                "ulbs": "नगरीय निकाय",
+            }.get(tgt, tgt)
+            scope_hi = translate_crumb(scope, "hi")
+            return f"{scope_hi} में कुल {val:,} {tgt_hi} हैं।"
+        if language == "hinglish":
+            tgt_hg = {
+                "districts": "Districts",
+                "divisions": "Divisions",
+                "tehsils": "Tehsils & Blocks",
+                "villages": "Villages",
+                "gram_panchayats": "Gram Panchayats",
+                "ulbs": "Urban Local Bodies",
+            }.get(tgt, tgt)
+            return f"{scope} mein kul {val:,} {tgt_hg} hain."
+        tgt_en = {
+            "districts": "District" if val == 1 else "Districts",
+            "divisions": "Division" if val == 1 else "Divisions",
+            "tehsils": "Tehsil / Block" if val == 1 else "Tehsils & Blocks",
+            "villages": "Village" if val == 1 else "Villages",
+            "gram_panchayats": "Gram Panchayat" if val == 1 else "Gram Panchayats",
+            "ulbs": "Urban Local Body" if val == 1 else "Urban Local Bodies",
+        }.get(tgt, tgt)
+        return f"{scope}: {val:,} {tgt_en}"
 
     # Officials
     collectorate = details.get("collectorate") or f"District Collectorate, {dist}"
@@ -1554,38 +1615,7 @@ async def database_lookup_node(state: AgentState) -> AgentState:
     t0 = time.perf_counter()
     query = state["user_query"]
 
-    # 1. Check for direct MCP database metadata / stats / schema queries
-    mcp_meta_req = _detect_mcp_metadata_intent(query)
-    if mcp_meta_req:
-        try:
-            mcp_res = await mcp_client.call_tool(mcp_meta_req["tool"], mcp_meta_req["arguments"])
-            if mcp_res.get("ok"):
-                state["sql_trace"] = {
-                    "matched": True,
-                    "entity_type": "MCPMetadata",
-                    "entity_name": mcp_meta_req["tool"],
-                    "lineage": {"mcp_tool": mcp_meta_req["tool"], "transport": mcp_res.get("transport")},
-                    "breadcrumbs": ["Rajasthan", "PostgreSQL MCP", mcp_meta_req["tool"]],
-                    "details": mcp_res.get("data", {})
-                }
-                state["mcp_used"] = True
-                state["mcp_tool"] = mcp_meta_req["tool"]
-                state["mcp_transport"] = mcp_res.get("transport")
-                state["resolution_stage"] = "mcp_server"
-                ms = max(1, int((time.perf_counter() - t0) * 1000))
-                _append_step(
-                    state,
-                    "db_mcp",
-                    "PostgreSQL MCP Server Tool Call",
-                    f"Executed {mcp_meta_req['tool']} via {mcp_res.get('transport')}",
-                    "🔌",
-                    duration_ms=ms,
-                )
-                return state
-        except Exception as e:
-            logger.warning(f"MCP metadata lookup failed: {e}")
-
-    # 2. Run primary 6-tier lookup (or reuse pre-match from guardrail) + concurrent MCP lineage check
+    # Run primary 6-tier lookup (or reuse pre-match from guardrail) + concurrent MCP geographic lineage check
     pre_trace = state.get("sql_trace")
     has_pre_match = bool(pre_trace and pre_trace.get("matched"))
     mcp_term = _extract_mcp_lookup_term(query)
@@ -1637,11 +1667,11 @@ async def database_lookup_node(state: AgentState) -> AgentState:
 
     ms = max(1, int((time.perf_counter() - t0) * 1000))
     if lookup.get("matched"):
-        mcp_note = f" + MCP ({state['mcp_transport']})" if mcp_ok else ""
+        mcp_note = " + MCP Verified" if mcp_ok else ""
         _append_step(
             state,
             "db_mcp",
-            "6-Tier PostgreSQL & MCP Lookup",
+            "6-Tier Geographic & MCP Lookup",
             f"Matched {lookup.get('entity_type')}: {lookup.get('entity_name')}{mcp_note}",
             "⚡",
             duration_ms=ms,
@@ -1650,8 +1680,8 @@ async def database_lookup_node(state: AgentState) -> AgentState:
         _append_step(
             state,
             "db_mcp",
-            "6-Tier PostgreSQL & MCP Lookup",
-            "No direct match in 6-tier tables — escalating to RAG & Web Search",
+            "6-Tier Geographic & MCP Lookup",
+            "No direct match in 6-tier directory — escalating to fallback",
             "⚡",
             duration_ms=ms,
         )
@@ -1669,23 +1699,7 @@ async def synthesizer_node(state: AgentState) -> AgentState:
     lang = detect_query_language(state["user_query"], state.get("language"))
     state["language"] = lang
 
-    # 0. MCP Database Metadata / Stats Response
-    if matched and lookup.get("entity_type") == "MCPMetadata":
-        state["breadcrumbs"] = lookup.get("breadcrumbs", ["Rajasthan", "PostgreSQL MCP"])
-        mcp_out = format_mcp_metadata_response(
-            tool_name=lookup.get("entity_name") or "get_database_stats",
-            data=lookup.get("details") or {},
-            transport=state.get("mcp_transport") or "stdio-jsonrpc",
-            lang=lang,
-            phone=phone
-        )
-        state["response_text"] = mcp_out["text"]
-        state["next_questions"] = mcp_out["next_questions"]
-        ms = max(1, int((time.perf_counter() - t0) * 1000))
-        _append_step(state, "synthesizer", "MCP Response Synthesizer", f"Formatted MCP output ({lang})", "🤖", duration_ms=ms)
-        return state
-
-    # 1. Exact Database / MCP Lineage Match
+    # 1. Exact Geographic / MCP Lineage Match
     if matched:
         entity_name = lookup.get("entity_name") or state["user_query"]
         entity_type = lookup.get("entity_type") or "Administrative Entity"
@@ -1696,7 +1710,10 @@ async def synthesizer_node(state: AgentState) -> AgentState:
         if not state.get("resolution_stage") or state.get("resolution_stage") == "unmatched":
             state["resolution_stage"] = "postgres_mcp" if state.get("mcp_used") else "postgres_direct"
 
-        next_questions = generate_next_expected_questions(entity_name, entity_type, lineage, details, lang)
+        if details.get("direct_count_query"):
+            next_questions = []
+        else:
+            next_questions = generate_next_expected_questions(entity_name, entity_type, lineage, details, lang)
         state["next_questions"] = next_questions
 
         formatted_natural_text = format_natural_language_lineage(

@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends, status, Header
 from pydantic import BaseModel, Field
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from app.config import settings
 from app.db.session import AsyncSessionLocal
 from app.db.models import PortalUser
@@ -26,7 +26,18 @@ _IN_MEMORY_USERS: Dict[str, Dict[str, Any]] = {
         "preferred_language": "hi",
         "role": "user",
         "created_at": "2026-11-20T10:00:00Z",
-    }
+    },
+    "8946919241": {
+        "id": 2,
+        "username": "8946919241",
+        "name": "Rohit Jain",
+        "phone": "8946919241",
+        "email": "rohit@ai-showcase.dev",
+        "password_hash": get_password_hash("123456"),
+        "preferred_language": "en",
+        "role": "user",
+        "created_at": "2026-11-20T10:00:00Z",
+    },
 }
 
 
@@ -164,14 +175,14 @@ async def register_user(
 
     pwd_hash = get_password_hash(pwd_clean)
     phone_clean = (req.phone or "").strip()
-    email_clean = (req.email or "").strip()
+    email_clean = (req.email or "").strip().lower()
     lang_clean = (req.preferred_language or "en").strip()
 
     user_data: Optional[Dict[str, Any]] = None
     try:
         async with AsyncSessionLocal() as session:
             existing = (
-                await session.execute(select(PortalUser).where(PortalUser.username == u_clean))
+                await session.execute(select(PortalUser).where(func.lower(PortalUser.username) == u_clean))
             ).scalar_one_or_none()
             if existing:
                 raise HTTPException(
@@ -258,9 +269,9 @@ async def login_user(
         async with AsyncSessionLocal() as session:
             stmt = select(PortalUser).where(
                 or_(
-                    PortalUser.username == u_clean,
+                    func.lower(PortalUser.username) == u_clean,
                     PortalUser.phone == u_clean,
-                    PortalUser.email == u_clean,
+                    func.lower(PortalUser.email) == u_clean,
                 )
             )
             db_user = (await session.execute(stmt)).scalar_one_or_none()

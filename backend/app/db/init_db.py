@@ -2,7 +2,7 @@ import asyncio
 import json
 import bcrypt
 from datetime import datetime
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import async_engine, AsyncSessionLocal, Base
 from app.db.models import (
@@ -514,6 +514,38 @@ async def seed_initial_data():
             session.add(admin)
             await session.commit()
             print(f"Seeded Admin: {DEFAULT_ADMIN_USER}")
+
+        # 2b. Default Portal Users (Demo Guest & Default Account for root Chat Login)
+        default_portal_users = [
+            {
+                "username": "guest_user",
+                "name": "Guest Explorer",
+                "phone": "9876543210",
+                "email": "explorer@ai-showcase.dev",
+                "preferred_language": "hi",
+            },
+            {
+                "username": DEFAULT_ADMIN_USER,
+                "name": "Rohit Jain",
+                "phone": DEFAULT_ADMIN_USER,
+                "email": "rohit@ai-showcase.dev",
+                "preferred_language": "en",
+            },
+        ]
+        for pu in default_portal_users:
+            res_pu = await session.execute(select(PortalUser).filter_by(username=pu["username"]))
+            if not res_pu.scalar_one_or_none():
+                hashed_pu = bcrypt.hashpw(DEFAULT_ADMIN_PASS.encode(), bcrypt.gensalt()).decode()
+                session.add(PortalUser(
+                    username=pu["username"],
+                    name=pu["name"],
+                    phone=pu["phone"],
+                    email=pu["email"],
+                    password_hash=hashed_pu,
+                    preferred_language=pu["preferred_language"],
+                    role="user",
+                ))
+        await session.commit()
 
         # 3. LLM Setting
         res_llm = await session.execute(select(LLMSetting).filter_by(id=1))
